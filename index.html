@@ -786,7 +786,7 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
         <div id="tw-days-preview" style="font-size:12px;color:var(--text2);margin-bottom:12px;min-height:18px;"></div>
         <div class="form-group"><label class="form-label">Comentario <span style="font-size:11px;color:var(--text2);">(opcional)</span></label><textarea id="tw-comment" placeholder="Opcional..."></textarea></div>
         <div id="tw-bolsa-info" style="font-size:12px;color:var(--text2);background:var(--surface2);border-radius:var(--r);padding:8px 12px;margin-bottom:.75rem;">
-          <i class="ti ti-info-circle"></i> No necesita aprobación — quedan registrados directamente. Se descuentan de tu bolsa de 5 días.
+          <i class="ti ti-info-circle"></i> No necesita aprobación — quedan registrados directamente. Se descuentan de tu bolsa de <span id="tw-bolsa-size-1">5</span> días.
         </div>
         <button class="btn btn-grad" onclick="submitTWRequest(this)"><i class="ti ti-calendar-check"></i> Registrar días</button>
       </div>
@@ -1257,11 +1257,11 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
 
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:8px;">1 · Días extra de teletrabajo en casa</div>
         <div class="guide-block" style="margin-bottom:12px;">
-          Los lunes, viernes, Semana Santa, agosto y Navidad ya son días de teletrabajo establecidos — no hay que solicitar nada. Esta bolsa es para días <strong>fuera de esos periodos</strong> en los que quieras trabajar desde casa. Tienes 5 días anuales. <strong>No necesita aprobación</strong>: se registra directamente.
+          Los lunes, viernes, Semana Santa, agosto y Navidad ya son días de teletrabajo establecidos — no hay que solicitar nada. Esta bolsa es para días <strong>fuera de esos periodos</strong> en los que quieras trabajar desde casa. Tienes <span id="tw-bolsa-size-2">5</span> días anuales. <strong>No necesita aprobación</strong>: se registra directamente.
         </div>
         <div class="guide-steps" style="margin-bottom:20px;">
           <div class="guide-step">En la sección "Días extra de teletrabajo en casa", elige la fecha (o rango).</div>
-          <div class="guide-step">Pulsa "Registrar días". Quedan apuntados al instante y se descuentan de tu bolsa de 5 días.</div>
+          <div class="guide-step">Pulsa "Registrar días". Quedan apuntados al instante y se descuentan de tu bolsa de <span id="tw-bolsa-size-3">5</span> días.</div>
         </div>
 
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:8px;">2 · Cambio de ubicación</div>
@@ -2654,7 +2654,9 @@ function renderMySolicitudes() {
   const twEl = document.getElementById('tele-days-used');
   const leftEl = document.getElementById('tele-days-left');
   if(twEl) twEl.textContent = twAprobados;
-  if(leftEl) { leftEl.textContent = Math.max(0, 5 - twAprobados); leftEl.style.color = twAprobados>=5?'#c62828':'#2e7d32'; }
+  const twBolsa = parseInt(supaProfile?.dias_tw || 5);
+  if(leftEl) { leftEl.textContent = Math.max(0, twBolsa - twAprobados); leftEl.style.color = twAprobados>=twBolsa?'#c62828':'#2e7d32'; }
+  ['tw-bolsa-size-1','tw-bolsa-size-2','tw-bolsa-size-3'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=twBolsa;});
   // Mis solicitudes TW bolsa (solo isTWBolsa)
   const twList = document.getElementById('tw-requests-list');
   if(twList) {
