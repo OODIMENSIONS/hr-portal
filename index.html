@@ -2482,7 +2482,7 @@ function buildCalendarData() {
         try { atMeta = JSON.parse(s.nota||'{}'); } catch(e) { atMeta = {}; }
       }
       const fmtD = iso => new Date(iso+'T12:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'});
-      teamTele[k].push({name: nombre, isMe, estado, tipo: s.tipo, atMeta, userId: s.usuario_id, startFmt: fmtD(s.fecha_inicio)});
+      teamTele[k].push({id: s.id, name: nombre, isMe, estado, tipo: s.tipo, atMeta, userId: s.usuario_id, startFmt: fmtD(s.fecha_inicio)});
     } else {
       // Vacaciones/ausencias: rango fecha_inicio → fecha_fin
       const start = new Date(s.fecha_inicio+'T12:00:00');
@@ -2859,6 +2859,7 @@ function renderCal() {
       const filtered = calFilters.me ? tele.filter(t=>t.isMe) : (currentRole==='admin' ? tele : tele.filter(t=>t.isMe||t.estado==='aprobado'));
       filtered.forEach(t=>{
         const pend = t.estado==='pendiente';
+        const adminCancelBtn = (currentRole==='admin' && t.id) ? `<span onclick="event.stopPropagation();cancelFromDB('${t.id}',false)" title="Cancelar" style="margin-left:auto;cursor:pointer;font-size:9px;color:#c62828;font-weight:700;flex-shrink:0;">✕</span>` : '';
         if(t.tipo === 'AT') {
           if(!calFilters.at) return;
           const bg = pend ? '#fff8e1' : '#fff3e0';
@@ -2867,7 +2868,7 @@ function renderCal() {
           const times = (m.horaSalida||m.horaRegreso) ? ` ${m.horaSalida||''}${m.horaRegreso?'→'+m.horaRegreso:''}` : '';
           const name = t.isMe ? 'Yo' : t.name;
           const tooltip = `data-cal-tip="${escapeHtml(t.name)} · Ausencia temporal${m.razon?' · '+m.razon:''}${times?' · '+times:''}"`;
-          inner+=`<div class="cal-ev" ${tooltip} style="background:${bg};color:#e65100;font-size:10px;border:${border};">⏱ ${name}${times}${pend?' (pend.)':''}</div>`;
+          inner+=`<div class="cal-ev" ${tooltip} data-sol-id="${t.id||''}" style="background:${bg};color:#e65100;font-size:10px;border:${border};display:flex;align-items:center;gap:2px;">⏱ ${name}${times}${pend?' (pend.)':''}${adminCancelBtn}</div>`;
         } else {
           if(!calFilters.tw) return;
           const name = t.isMe ? 'Yo' : t.name;
@@ -2876,11 +2877,11 @@ function renderCal() {
             const c = capUserColor(t.userId);
             const stripe = `repeating-linear-gradient(45deg,${c}22,${c}22 4px,${c}44 4px,${c}44 8px)`;
             const border = pend ? `1.5px dashed ${c}` : `1.5px solid ${c}`;
-            inner+=`<div class="cal-ev" ${tooltip} style="background:${stripe};border:${border};color:${c};font-size:10px;">TW: ${name}${pend?' (pend.)':''}</div>`;
+            inner+=`<div class="cal-ev" ${tooltip} data-sol-id="${t.id||''}" style="background:${stripe};border:${border};color:${c};font-size:10px;display:flex;align-items:center;gap:2px;">TW: ${name}${pend?' (pend.)':''}${adminCancelBtn}</div>`;
           } else {
             const bg = pend ? '#f3f4fd' : '#e8eaf6';
             const border = pend ? '1px dashed #9fa8da' : '1px solid #9fa8da';
-            inner+=`<div class="cal-ev" ${tooltip} style="background:${bg};color:#283593;font-size:10px;border:${border};">TW: ${name}${pend?' (pend.)':''}</div>`;
+            inner+=`<div class="cal-ev" ${tooltip} data-sol-id="${t.id||''}" style="background:${bg};color:#283593;font-size:10px;border:${border};display:flex;align-items:center;gap:2px;">TW: ${name}${pend?' (pend.)':''}${adminCancelBtn}</div>`;
           }
         }
       });
