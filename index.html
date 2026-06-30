@@ -3764,7 +3764,7 @@ function updateTWPreview() {
   const days=Math.max(1,count);
   const mine=solicitudesCache.filter(s=>s.usuario_id===supaUser?.id);
   const used=mine.filter(s=>isTWBolsa(s)&&!['denegado','cancelado'].includes(s.estado)).reduce((a,s)=>a+(parseFloat(s.dias)||1),0);
-  const left=Math.max(0,5-used);
+  const left=Math.max(0,parseInt(supaProfile?.dias_tw??5)-used);
   el.style.color = days>left ? '#c62828' : 'var(--text2)';
   el.textContent = `${days} día${days!==1?'s':''} laborable${days!==1?'s':''} · Bolsa restante: ${left} día${left!==1?'s':''}`;
 }
