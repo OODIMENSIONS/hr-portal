@@ -130,7 +130,7 @@ input[disabled], select[disabled] { background: var(--surface2); color: var(--te
 .cal-nav-title { font-size: 15px; font-weight: 500; }
 .cal-nav-btn { background: none; border: 0.5px solid var(--border2); border-radius: 6px; width: 30px; height: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text2); }
 .cal-nav-btn:hover { background: var(--surface2); }
-.cal-filter-active { background: var(--text) !important; color: white !important; border-color: var(--text) !important; }
+.cal-filter-active { background: white !important; color: var(--text) !important; border-image: var(--grad) 1 !important; border-width: 1.5px !important; border-style: solid !important; font-weight: 600 !important; }
 .cal-filter-active span { opacity: 1; }
 #cal-filter-me.solo-me { background: var(--grad) !important; color: white !important; border-color: transparent !important; }
 .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
@@ -2781,9 +2781,32 @@ function renderHistoryFromDB() {
     const pdfBtn = isTCApproved
       ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px;" onclick="downloadSignedTeleDoc('${s.id}')"><i class="ti ti-file-check"></i> PDF firmado</button>`
       : '';
+    const diasStr = s.dias ? ` · ${s.dias} día${s.dias!=1?'s':''}` : '';
+    const isHalf = ['MA','MD'].includes(s.tipo);
+    let extraDetail = '';
+    if(s.tipo === 'AT') {
+      try {
+        const m = JSON.parse(s.nota||'{}');
+        const times = (m.horaSalida||m.horaRegreso) ? `${m.horaSalida||'?'}–${m.horaRegreso||'?'}` : '';
+        const horas = m.horas ? ` · ${m.horas}h` : '';
+        const just  = m.tieneJustificante ? ' · Con justificante' : '';
+        const razon = m.razon ? ` · ${m.razon}` : '';
+        if(times||horas||razon) extraDetail = `<div style="font-size:11px;color:var(--text2);margin-top:2px;">${times}${horas}${razon}${just}</div>`;
+      } catch(e) {}
+    } else if(isHalf) {
+      extraDetail = `<div style="font-size:11px;color:var(--text2);margin-top:2px;">½ día</div>`;
+    } else if(s.nota) {
+      extraDetail = `<div style="font-size:11px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">${s.nota}</div>`;
+    }
+    const typeColors2 = {A:'#e8f5e9',MA:'#e8f5e9',AP:'#fff3e0',MD:'#e8f5e9',AT:'#fff8e1',TW:'#e8eaf6',TC:'#fce4ec'};
+    const typeText2  = {A:'#1b5e20',MA:'#1b5e20',AP:'#e65100',MD:'#1b5e20',AT:'#bf360c',TW:'#283593',TC:'#880e4f'};
     return `<div class="req-item">
-      <div class="avatar" style="background:#e8eaf6;color:#283593;flex-shrink:0;">${initials}</div>
-      <div class="req-info"><div class="req-name">${shortName(s.usuarios?.nombre)} — ${range}</div><div class="req-sub">${typeLabels[s.tipo]||s.tipo}${approverInfo}</div></div>
+      <div class="avatar" style="background:${typeColors2[s.tipo]||'#e8eaf6'};color:${typeText2[s.tipo]||'#283593'};flex-shrink:0;">${initials}</div>
+      <div class="req-info">
+        <div class="req-name">${shortName(s.usuarios?.nombre)} — ${range}${diasStr}</div>
+        <div class="req-sub">${typeLabels[s.tipo]||s.tipo}${approverInfo}</div>
+        ${extraDetail}
+      </div>
       <span class="badge ${badgeCls}">${estadoLabel}</span>
       ${pdfBtn}${cancelBtn}
     </div>`;
