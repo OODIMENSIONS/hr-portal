@@ -2640,9 +2640,11 @@ function renderMySolicitudes() {
     const cancelEmpBtn = canEmployeeCancel
       ? `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px;color:#c62828;border-color:#c62828;" onclick="cancelFromDB('${s.id}',true)">Cancelar</button>`
       : '';
+    const approverU = s.aprobado_por ? usuariosCache.find(u=>u.id===s.aprobado_por) : null;
+    const approvedByStr = approverU ? `<div style="font-size:10px;color:var(--text2);margin-top:2px;"><i class="ti ti-circle-check" style="color:#2e7d32;"></i> Aprobado por ${approverU.nombre.split(' ').slice(0,2).join(' ')}</div>` : '';
     return `<div class="req-item">
       <div style="width:3px;border-radius:2px;background:${accent};flex-shrink:0;align-self:stretch;"></div>
-      <div class="req-info"><div class="req-name">${range}</div><div class="req-sub">${typeLabels[s.tipo]||s.tipo}</div>${atDetail}</div>
+      <div class="req-info"><div class="req-name">${range}</div><div class="req-sub">${typeLabels[s.tipo]||s.tipo}</div>${atDetail}${s.estado==='aprobado'?approvedByStr:''}</div>
       <span class="badge ${badgeCls}">${estadoLabel}</span>
       ${pdfBtn}${cancelEmpBtn}
     </div>`;
