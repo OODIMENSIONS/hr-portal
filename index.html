@@ -753,46 +753,48 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
   <div id="tab-teletrabajo" class="panel">
   <!-- Panel empleado -->
   <div id="tele-employee-panel">
-    <!-- Bolsa TW -->
-    <div style="background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r);overflow:hidden;margin-bottom:1.25rem;">
-      <div style="padding:12px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
-          <i class="ti ti-home-2" style="font-size:20px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"></i>
-          <span style="font-size:13px;font-weight:500;">Bolsa de teletrabajo desde casa</span>
-          <span style="font-size:11px;color:var(--text2);">Días desde tu ubicación habitual</span>
-        </div>
-        <div style="display:flex;gap:20px;margin-left:auto;">
-          <div style="text-align:center;"><div style="font-size:22px;font-weight:500;" id="tele-days-used">—</div><div style="font-size:11px;color:var(--text2);">usados</div></div>
-          <div style="text-align:center;"><div style="font-size:22px;font-weight:500;color:#2e7d32;" id="tele-days-left">—</div><div style="font-size:11px;color:var(--text2);">disponibles</div></div>
-          <div style="text-align:center;"><div style="font-size:22px;font-weight:500;">5</div><div style="font-size:11px;color:var(--text2);">total</div></div>
+    <!-- Bolsa TW — oculta si dias_tw = 0 -->
+    <div id="tw-bolsa-section">
+      <div style="background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r);overflow:hidden;margin-bottom:1.25rem;">
+        <div style="padding:12px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
+            <i class="ti ti-home-2" style="font-size:20px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"></i>
+            <span style="font-size:13px;font-weight:500;">Bolsa de teletrabajo desde casa</span>
+            <span style="font-size:11px;color:var(--text2);">Días desde tu ubicación habitual</span>
+          </div>
+          <div style="display:flex;gap:20px;margin-left:auto;">
+            <div style="text-align:center;"><div style="font-size:22px;font-weight:500;" id="tele-days-used">—</div><div style="font-size:11px;color:var(--text2);">usados</div></div>
+            <div style="text-align:center;"><div style="font-size:22px;font-weight:500;color:#2e7d32;" id="tele-days-left">—</div><div style="font-size:11px;color:var(--text2);">disponibles</div></div>
+            <div style="text-align:center;"><div style="font-size:22px;font-weight:500;" id="tele-days-total">—</div><div style="font-size:11px;color:var(--text2);">total</div></div>
+          </div>
         </div>
       </div>
-    </div>
-    <!-- Formulario nueva solicitud TW bolsa -->
-    <div class="grid2" style="margin-bottom:1.25rem;">
-      <div class="card">
-        <div class="card-title"><i class="ti ti-calendar-plus"></i> Solicitar días de teletrabajo en casa</div>
-        <div class="form-group">
-          <label class="form-label">Fecha</label>
-          <input type="date" id="tw-start" oninput="updateTWPreview()"/>
+      <!-- Formulario nueva solicitud TW bolsa -->
+      <div class="grid2" style="margin-bottom:1.25rem;">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-calendar-plus"></i> Solicitar días de teletrabajo en casa</div>
+          <div class="form-group">
+            <label class="form-label">Fecha</label>
+            <input type="date" id="tw-start" oninput="updateTWPreview()"/>
+          </div>
+          <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="tw-multiday" onclick="toggleTWMultiDay(this.checked)" style="accent-color:var(--primary);width:15px;height:15px;cursor:pointer;"/>
+            <label for="tw-multiday" style="font-size:13px;cursor:pointer;color:var(--text2);">Hasta otra fecha (varios días)</label>
+          </div>
+          <div id="tw-end-group" style="display:none;">
+            <div class="form-group"><label class="form-label">Fecha de fin</label><input type="date" id="tw-end" oninput="updateTWPreview()"/></div>
+          </div>
+          <div id="tw-days-preview" style="font-size:12px;color:var(--text2);margin-bottom:12px;min-height:18px;"></div>
+          <div class="form-group"><label class="form-label">Comentario <span style="font-size:11px;color:var(--text2);">(opcional)</span></label><textarea id="tw-comment" placeholder="Opcional..."></textarea></div>
+          <div id="tw-bolsa-info" style="font-size:12px;color:var(--text2);background:var(--surface2);border-radius:var(--r);padding:8px 12px;margin-bottom:.75rem;">
+            <i class="ti ti-info-circle"></i> No necesita aprobación — quedan registrados directamente. Se descuentan de tu bolsa de <span id="tw-bolsa-size-1">5</span> días.
+          </div>
+          <button class="btn btn-grad" onclick="submitTWRequest(this)"><i class="ti ti-calendar-check"></i> Registrar días</button>
         </div>
-        <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="tw-multiday" onclick="toggleTWMultiDay(this.checked)" style="accent-color:var(--primary);width:15px;height:15px;cursor:pointer;"/>
-          <label for="tw-multiday" style="font-size:13px;cursor:pointer;color:var(--text2);">Hasta otra fecha (varios días)</label>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-list"></i> Mis días de teletrabajo registrados</div>
+          <div class="req-list" id="tw-requests-list"></div>
         </div>
-        <div id="tw-end-group" style="display:none;">
-          <div class="form-group"><label class="form-label">Fecha de fin</label><input type="date" id="tw-end" oninput="updateTWPreview()"/></div>
-        </div>
-        <div id="tw-days-preview" style="font-size:12px;color:var(--text2);margin-bottom:12px;min-height:18px;"></div>
-        <div class="form-group"><label class="form-label">Comentario <span style="font-size:11px;color:var(--text2);">(opcional)</span></label><textarea id="tw-comment" placeholder="Opcional..."></textarea></div>
-        <div id="tw-bolsa-info" style="font-size:12px;color:var(--text2);background:var(--surface2);border-radius:var(--r);padding:8px 12px;margin-bottom:.75rem;">
-          <i class="ti ti-info-circle"></i> No necesita aprobación — quedan registrados directamente. Se descuentan de tu bolsa de <span id="tw-bolsa-size-1">5</span> días.
-        </div>
-        <button class="btn btn-grad" onclick="submitTWRequest(this)"><i class="ti ti-calendar-check"></i> Registrar días</button>
-      </div>
-      <div class="card">
-        <div class="card-title"><i class="ti ti-list"></i> Mis días de teletrabajo registrados</div>
-        <div class="req-list" id="tw-requests-list"></div>
       </div>
     </div>
     <div style="border-top:1px solid var(--border2);margin-bottom:1.25rem;padding-top:1.25rem;">
@@ -1428,6 +1430,10 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
       </select>
       <p style="font-size:11px;color:var(--text2);margin-top:4px;">Determina qué festivos locales te afectan automáticamente.</p>
     </div>
+    <div class="form-group" id="p-ubicacion-tw-group">
+      <label class="form-label">Ubicación habitual de teletrabajo <span style="font-size:11px;color:var(--text2);font-weight:400;">(visible para el administrador)</span></label>
+      <input type="text" id="p-ubicacion-tw" placeholder="Ej: Domicilio en Valencia, casa de mis padres en Alicante…" oninput="syncProfile()"/>
+    </div>
 
     <div class="grid2">
       <div class="form-group"><label class="form-label">Fecha de incorporación</label><input type="date" id="p-fecha-entrada" oninput="syncProfile()"/></div>
@@ -1760,6 +1766,10 @@ function openProfile() {
   document.getElementById('p-fecha-entrada').value = profile.fechaEntrada || '';
   document.getElementById('p-cumpleanos').value   = profile.cumpleanos || '';
   document.getElementById('p-bio').value          = profile.bio || '';
+  const twB = parseInt(supaProfile?.dias_tw ?? 5);
+  const ubicTwGroup = document.getElementById('p-ubicacion-tw-group');
+  if(ubicTwGroup) ubicTwGroup.style.display = twB > 0 ? '' : 'none';
+  document.getElementById('p-ubicacion-tw').value = supaProfile?.ubicacion_tw || '';
   // Actualizar el nombre en el header del modal
   document.getElementById('profile-display-name').textContent = profile.nombre || '—';
   document.getElementById('profile-display-role').textContent = currentRole === 'admin' ? 'Administrador' : 'Empleado';
@@ -1927,7 +1937,8 @@ async function saveProfile() {
   if(supaUser) {
     const newEmail = profile.email.trim();
     const emailChanged = currentRole === 'admin' && newEmail && newEmail !== supaUser.email;
-    const coreUpdate = { nombre: profile.nombre, dni: profile.dni, departamento: profile.dpto, cargo: profile.cargo, ciudad: profile.ciudad };
+    const ubicTw = (document.getElementById('p-ubicacion-tw')?.value || '').trim() || null;
+    const coreUpdate = { nombre: profile.nombre, dni: profile.dni, departamento: profile.dpto, cargo: profile.cargo, ciudad: profile.ciudad, ubicacion_tw: ubicTw };
     const fullUpdate = { ...coreUpdate, bio: profile.bio, fecha_entrada: profile.fechaEntrada||null, cumpleanos: profile.cumpleanos||null, ...(emailChanged ? {email: newEmail} : {}) };
     const { error: upErr } = await supa.from('usuarios').update(fullUpdate).eq('id', supaUser.id);
     if(upErr) {
@@ -2654,9 +2665,16 @@ function renderMySolicitudes() {
   const twEl = document.getElementById('tele-days-used');
   const leftEl = document.getElementById('tele-days-left');
   if(twEl) twEl.textContent = twAprobados;
-  const twBolsa = parseInt(supaProfile?.dias_tw || 5);
-  if(leftEl) { leftEl.textContent = Math.max(0, twBolsa - twAprobados); leftEl.style.color = twAprobados>=twBolsa?'#c62828':'#2e7d32'; }
-  ['tw-bolsa-size-1','tw-bolsa-size-2','tw-bolsa-size-3'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=twBolsa;});
+  const twBolsa = parseInt(supaProfile?.dias_tw ?? 5);
+  const tieneBolsa = twBolsa > 0;
+  const bolsaSection = document.getElementById('tw-bolsa-section');
+  if(bolsaSection) bolsaSection.style.display = tieneBolsa ? '' : 'none';
+  if(tieneBolsa) {
+    if(leftEl) { leftEl.textContent = Math.max(0, twBolsa - twAprobados); leftEl.style.color = twAprobados>=twBolsa?'#c62828':'#2e7d32'; }
+    const totalEl = document.getElementById('tele-days-total');
+    if(totalEl) totalEl.textContent = twBolsa;
+    ['tw-bolsa-size-1','tw-bolsa-size-2','tw-bolsa-size-3'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=twBolsa;});
+  }
   // Mis solicitudes TW bolsa (solo isTWBolsa)
   const twList = document.getElementById('tw-requests-list');
   if(twList) {
@@ -3796,9 +3814,10 @@ async function submitTWRequest(btn) {
   if(end < start) { alert('La fecha de fin no puede ser anterior a la de inicio.'); return; }
   let days=0; for(let c=new Date(start+'T12:00:00'),e=new Date(end+'T12:00:00');c<=e;c=new Date(c.getTime()+86400000)){ if(c.getDay()!==0&&c.getDay()!==6) days++; }
   days=Math.max(1,days);
+  const twBolsaMax = parseInt(supaProfile?.dias_tw || 5);
   const mine = solicitudesCache.filter(s=>s.usuario_id===supaUser.id);
   const twUsados = mine.filter(s=>isTWBolsa(s)&&!['denegado','cancelado'].includes(s.estado)).reduce((a,s)=>a+(parseFloat(s.dias)||1),0);
-  if(twUsados+days>5){ alert(`Solo te quedan ${Math.max(0,5-twUsados)} días de bolsa. Has seleccionado ${days} días laborables.`); return; }
+  if(twUsados+days>twBolsaMax){ alert(`Solo te quedan ${Math.max(0,twBolsaMax-twUsados)} días de bolsa. Has seleccionado ${days} días laborables.`); return; }
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Enviando…';
   const {error} = await supa.from('solicitudes').insert({
     usuario_id:supaUser.id, tipo:'TW', fecha_inicio:start, fecha_fin:end,
@@ -3817,7 +3836,7 @@ async function submitTWRequest(btn) {
 }
 
 // ===== BOLSA DÍAS TELETRABAJO =====
-const PACK_TOTAL = 5;
+const PACK_TOTAL = 5; // legacy — usar supaProfile.dias_tw en su lugar
 
 function renderPackDays() {
   // El contador se actualiza desde renderMySolicitudes() usando solicitudesCache
@@ -4574,6 +4593,7 @@ function renderEquipoTab() {
       <div style="width:100%;border-top:0.5px solid var(--border);padding-top:10px;text-align:left;">
         ${fechaRow}${bdayRow}${finRow}
         ${bio ? `<div style="font-size:12px;color:var(--text);line-height:1.6;margin-top:6px;font-style:italic;">"${escapeHtml(bio)}"</div>` : ''}
+        ${isAdmin && u.ubicacion_tw ? `<div style="display:flex;align-items:flex-start;gap:5px;font-size:11px;color:var(--text2);margin-top:6px;"><i class="ti ti-home-2" style="font-size:13px;margin-top:1px;flex-shrink:0;"></i><span>${escapeHtml(u.ubicacion_tw)}</span></div>` : ''}
       </div>
       ${editBtn}
     </div>`;
