@@ -1766,9 +1766,6 @@ function openProfile() {
   document.getElementById('p-fecha-entrada').value = profile.fechaEntrada || '';
   document.getElementById('p-cumpleanos').value   = profile.cumpleanos || '';
   document.getElementById('p-bio').value          = profile.bio || '';
-  const twB = parseInt(supaProfile?.dias_tw ?? 5);
-  const ubicTwGroup = document.getElementById('p-ubicacion-tw-group');
-  if(ubicTwGroup) ubicTwGroup.style.display = twB > 0 ? '' : 'none';
   document.getElementById('p-ubicacion-tw').value = supaProfile?.ubicacion_tw || '';
   // Actualizar el nombre en el header del modal
   document.getElementById('profile-display-name').textContent = profile.nombre || '—';
