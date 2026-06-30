@@ -3508,7 +3508,7 @@ function setRole(role,btn){
   document.getElementById('apro-locked').style.display=(role==='admin'||canApproveVac)?'none':'flex';
   document.getElementById('tele-admin-panel').style.display=role==='admin'?'':'none';
   document.getElementById('tele-employee-panel').style.display=role==='admin'?'none':'';
-  document.getElementById('profile-display-role').textContent=role==='admin'?'Administrador':canApproveVac?'Aprobador de vacaciones':'Empleado';
+  document.getElementById('profile-display-role').textContent=role==='admin'?'Administrador':'Empleado';
   ['vac','hor','aus'].forEach(k=>{const b=document.getElementById('btn-edit-'+k);if(b)b.style.display=role==='admin'?'':'none';});
   if(role==='employee'){
     const at=document.querySelector('.tab.admin-only.active');
