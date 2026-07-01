@@ -5549,14 +5549,16 @@ async function anlSendEmailReport(){
           <div class="card-title" style="margin:0;"><i class="ti ti-calendar-week"></i> Vista semanal</div>
           <div style="display:flex;align-items:center;gap:6px;">
             <button onclick="cwWeekNav(-1)" class="btn btn-ghost btn-sm"><i class="ti ti-chevron-left"></i></button>
-            <span id="cw-week-label" style="font-size:13px;font-weight:600;color:var(--text);min-width:200px;text-align:center;"></span>
+            <span id="cw-week-label" style="font-size:13px;font-weight:600;color:var(--text);text-align:center;"></span>
             <button onclick="cwWeekNav(1)" class="btn btn-ghost btn-sm"><i class="ti ti-chevron-right"></i></button>
             <button onclick="cwWeekNav(0,true)" class="btn btn-ghost btn-sm" style="font-size:11px;">Esta semana</button>
           </div>
           <span id="cw-week-total" style="font-size:14px;font-weight:700;color:var(--primary);"></span>
         </div>
         <!-- Días de la semana -->
-        <div id="cw-week-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:12px;"></div>
+        <div style="overflow-x:auto;">
+          <div id="cw-week-grid" style="display:grid;grid-template-columns:repeat(7,minmax(70px,1fr));gap:6px;margin-bottom:12px;min-width:490px;"></div>
+        </div>
         <!-- Detalle del día seleccionado -->
         <div id="cw-week-detail" style="border-top:1px solid var(--border2);padding-top:12px;display:none;"></div>
       </div>
