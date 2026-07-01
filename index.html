@@ -132,7 +132,7 @@ input[disabled], select[disabled] { background: var(--surface2); color: var(--te
 .cal-nav-title { font-size: 15px; font-weight: 500; }
 .cal-nav-btn { background: none; border: 0.5px solid var(--border2); border-radius: 6px; width: 30px; height: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text2); }
 .cal-nav-btn:hover { background: var(--surface2); }
-.cal-filter-active { background: white !important; color: var(--text) !important; border-image: var(--grad) 1 !important; border-width: 1.5px !important; border-style: solid !important; font-weight: 600 !important; }
+.cal-filter-active { color: var(--text) !important; border: 1.5px solid transparent !important; border-radius: var(--r) !important; font-weight: 600 !important; background: linear-gradient(white, white) padding-box, var(--grad) border-box !important; }
 .cal-filter-active span { opacity: 1; }
 #cal-filter-me.solo-me { background: var(--grad) !important; color: white !important; border-color: transparent !important; }
 .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
@@ -405,7 +405,8 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
 .cw-day-col { border-radius:10px;border:1.5px solid var(--border2);padding:10px 8px;cursor:pointer;transition:.15s;text-align:center;background:var(--surface); }
 .cw-day-col:hover { border-color:var(--primary);background:var(--surface2); }
 .cw-day-col.cw-today { border-color:#1565C0;background:#e3f2fd; }
-.cw-day-col.cw-selected { border-image:var(--grad) 1;border-width:2px;border-style:solid; }
+.cw-day-col.cw-selected { border: 2px solid transparent; background-image: linear-gradient(var(--surface), var(--surface)), var(--grad); background-origin: border-box; background-clip: padding-box, border-box; }
+.cw-day-col.cw-today.cw-selected { background-image: linear-gradient(#e3f2fd, #e3f2fd), var(--grad); }
 .cw-day-name { font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px; }
 .cw-day-num { font-size:18px;font-weight:700;color:var(--text);line-height:1.2; }
 .cw-day-hours { font-size:12px;font-weight:700;color:var(--primary);margin-top:3px; }
@@ -638,6 +639,9 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
       </button>
       <button id="cal-filter-fest" class="btn btn-ghost btn-sm cal-filter-active" onclick="toggleCalFilter('fest')" title="Festivos">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f8bbd0;border:1px solid #f48fb1;flex-shrink:0;"></span> Festivos
+      </button>
+      <button id="cal-filter-bday" class="btn btn-ghost btn-sm cal-filter-active" onclick="toggleCalFilter('bday')" title="Cumpleaños del equipo">
+        🎂 Cumpleaños
       </button>
       <div style="width:1px;height:20px;background:var(--border2);"></div>
       <button id="cal-color-cat" class="btn btn-ghost btn-sm cal-filter-active" onclick="setCalColorMode('category')" title="Color por tipo de ausencia"><i class="ti ti-palette" style="font-size:13px;"></i> Por categoría</button>
@@ -2518,7 +2522,7 @@ let canApproveVac = false;
 
 // ===== CALENDARIO =====
 let currentMonth = new Date().getMonth(), currentYear = new Date().getFullYear();
-const calFilters = { vac: true, tw: true, at: true, fest: true, me: false };
+const calFilters = { vac: true, tw: true, at: true, fest: true, me: false, bday: true };
 const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 // Datos de solicitudes cargados desde Supabase
 let solicitudesCache = [];
@@ -3011,6 +3015,15 @@ function renderCal() {
         }
       });
     }
+    // Cumpleaños (siempre al final del día)
+    if(calFilters.bday) {
+      const dayMD=`${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      (usuariosCache||[]).filter(u=>u.cumpleanos&&u.cumpleanos.slice(5)===dayMD).forEach(u=>{
+        const sn=u.nombre.split(' ').slice(0,2).join(' ');
+        const age=currentYear-parseInt(u.cumpleanos.slice(0,4));
+        inner+=`<div class="cal-ev" style="background:#fce4ec;color:#880e4f;border:1px solid #f48fb1;font-size:10px;" data-cal-tip="${escapeHtml(u.nombre)} · 🎂 Cumpleaños${age>0?' ('+age+' años)':''}">🎂 ${escapeHtml(sn)}</div>`;
+      });
+    }
     h+=`<div class="${cls}">${inner}</div>`;
   }
   h+='</div>';
@@ -3223,7 +3236,9 @@ function buildTable() {
     : usuariosCache.filter(u => u.id === supaUser?.id);
 
   let h1 = '<tr><th class="col-name" rowspan="2">Nombre</th>';
-  h1 += '<th rowspan="2" style="text-align:right;">Vac.<br/>2026</th>';
+  h1 += '<th rowspan="2" style="text-align:right;">Vac.<br/>\'26</th>';
+  h1 += '<th rowspan="2" style="text-align:right;color:#1565C0;">Arr.<br/>\'25</th>';
+  h1 += '<th rowspan="2" style="text-align:right;border-left:2px solid rgba(255,255,255,.2);">Total</th>';
   h1 += '<th rowspan="2" style="text-align:right;">Asig.</th>';
   h1 += '<th rowspan="2" style="text-align:right;">Disfr.</th>';
   h1 += '<th rowspan="2" class="col-sep" style="text-align:right;color:#c62828;">Pend.</th>';
@@ -3256,7 +3271,9 @@ function buildTable() {
     const pend     = Math.max(0, total - asig);
     const fmt = n => Number.isInteger(n)?n:n.toFixed(1);
     rows += `<tr><td class="col-name">${u.nombre}</td>`;
-    rows += `<td class="num">${fmt(total)}</td>`;
+    rows += `<td class="num">${fmt(base2026u)}</td>`;
+    rows += `<td class="num" style="${arrEfectivos>0?'color:#1565C0;font-weight:600;':''}">${arrEfectivos>0?'+'+fmt(arrEfectivos):'—'}</td>`;
+    rows += `<td class="num" style="font-weight:600;border-left:2px solid var(--border2);">${fmt(total)}</td>`;
     rows += `<td class="num">${fmt(asig)}</td>`;
     rows += `<td class="num">${fmt(disfr)}</td>`;
     rows += `<td class="num col-sep ${pend>0?'num-warn':'num-ok'}">${fmt(pend)}</td>`;
@@ -4798,8 +4815,39 @@ let cwWeekOffset=0, cwSelectedDay=null, cwWeekEntries=[];
 const tipoColor=id=>(TIPOS_TAREA.find(t=>t.id===id)||{color:'#90A4AE'}).color;
 const tipoDesc =id=>(TIPOS_TAREA.find(t=>t.id===id)||{desc:''}).desc;
 const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${h}h ${String(m).padStart(2,'0')}m`:`${m}m ${String(sec).padStart(2,'0')}s`;};
+const fmtDurH=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return m?`${h}h ${m}m`:`${h}h`;};
 const entryDur=e=>{const s=new Date(e.hora_inicio),en=e.hora_fin?new Date(e.hora_fin):new Date();return Math.floor((en-s)/1000);};
 const entryProjName=e=>{ const p=cwProjects.find(x=>x.id===e.proyecto_id); return p?p.nombre+(p.cliente?' — '+p.cliente:''):''; };
+
+async function cwCheckOverlap(fecha,startISO,endISO,excludeId=null){
+  const {data}=await supa.from('time_entries').select('id,hora_inicio,hora_fin,tipo,descripcion')
+    .eq('usuario_id',supaUser.id).eq('fecha',fecha).not('hora_fin','is',null);
+  const ns=new Date(startISO),ne=new Date(endISO);
+  return (data||[]).filter(e=>e.id!==excludeId&&new Date(e.hora_inicio)<ne&&new Date(e.hora_fin)>ns);
+}
+function cwOverlapWarn(conflicts){
+  const lines=conflicts.map(e=>{
+    const s=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const lbl=e.tipo&&e.descripcion?`${e.tipo}_${e.descripcion}`:e.tipo||e.descripcion||'Sin datos';
+    return `• ${lbl} (${s}–${en})`;
+  }).join('\n');
+  return confirm(`⚠️ Esta entrada se solapa con:\n\n${lines}\n\n¿Continuar de todas formas?`);
+}
+// Objetivo de horas por día según horario OO Dimensions
+// L-J: 9-14 + 15-18:30 = 8,5h | V: 9-15 = 6h | Julio-Agosto: 7h/día L-V
+function cwDayTarget(dateStr){
+  const d=new Date(dateStr+'T12:00:00'), dow=d.getDay(), mo=d.getMonth()+1;
+  if(dow===0||dow===6) return 0; // fin de semana
+  if(mo===7||mo===8) return 7*3600; // verano
+  if(dow===5) return 6*3600; // viernes
+  return 8.5*3600; // lunes-jueves
+}
+function cwWeekTarget(monday){
+  let t=0;
+  for(let i=0;i<5;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);t+=cwDayTarget(ldate(d));}
+  return t;
+}
 
 async function initClockify(){
   ['fichaje-loading','fichaje-content','fichaje-no-config','fichaje-error'].forEach(id=>{
@@ -4819,7 +4867,7 @@ async function initClockify(){
   const md=document.getElementById('cw-manual-date'); if(md) md.value=today;
   await loadCWProjects();
   await checkRunningCWTimer();
-  await loadCWToday(); cwWeekOffset=0; await loadCWWeek();
+  cwWeekOffset=0; cwSelectedDay=ldate(); await loadCWWeek();
   if(supaProfile?.rol==='admin'){ document.getElementById('cw-admin-projects').style.display=''; await renderCWAdminProjects(); }
   document.getElementById('fichaje-loading').style.display='none';
   document.getElementById('fichaje-content').style.display='';
@@ -4947,13 +4995,16 @@ async function stopCWTimer(btn){
   if(!cwRunningEntry)return;
   if(!cwRunningEntry.tipo){showToast('Indica el tipo de tarea antes de parar ⚠️');return;}
   if(!cwRunningEntry.proyecto_id){showToast('Selecciona el proyecto antes de parar ⚠️');return;}
+  const nowISO=new Date().toISOString();
+  const _sc=await cwCheckOverlap(cwRunningEntry.fecha,cwRunningEntry.hora_inicio,nowISO,cwRunningEntry.id);
+  if(_sc.length&&!cwOverlapWarn(_sc))return;
   btn.disabled=true; btn.textContent='Parando…';
   const {error}=await supa.from('time_entries').update({hora_fin:new Date().toISOString()}).eq('id',cwRunningEntry.id);
   btn.disabled=false;
   if(error){console.error(error);alert('Error al parar el cronómetro.');return;}
   cwRunningEntry=null; hideRunningBanner();
   showToast('Entrada registrada ✓');
-  await loadCWToday(); await loadCWWeek();
+  await loadCWWeek(); loadAnlData();
 }
 
 async function addManualCWEntry(btn){
@@ -4963,6 +5014,9 @@ async function addManualCWEntry(btn){
   if(!tipo){alert('Selecciona el tipo de tarea.');return;}
   if(!startT||!endT||!dateV){alert('Indica fecha y hora.');return;}
   if(startT>=endT){alert('La hora de fin debe ser posterior a la de inicio.');return;}
+  const _si=new Date(`${dateV}T${startT}:00`).toISOString(),_ei=new Date(`${dateV}T${endT}:00`).toISOString();
+  const _mc=await cwCheckOverlap(dateV,_si,_ei);
+  if(_mc.length&&!cwOverlapWarn(_mc))return;
   const projId=document.getElementById('cw-project').value||null;
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>';
   const {error}=await supa.from('time_entries').insert({
@@ -4972,7 +5026,7 @@ async function addManualCWEntry(btn){
   });
   btn.disabled=false; btn.innerHTML='<i class="ti ti-plus"></i> Añadir';
   if(error){console.error(error);alert('Error al crear la entrada.');return;}
-  showToast('Entrada añadida ✓'); await loadCWToday(); await loadCWWeek();
+  showToast('Entrada añadida ✓'); await loadCWWeek(); loadAnlData();
 }
 
 async function loadCWToday(){
@@ -5047,6 +5101,11 @@ async function cwSaveEntryEdit(id,eid,fecha,btn){
   const desc=box.querySelector('[data-field="desc"]').value.trim()||null;
   const proj=box.querySelector('[data-field="proj"]').value||null;
   if(stV&&enV&&stV>=enV){alert('La hora de fin debe ser posterior al inicio.');return;}
+  if(stV&&enV){
+    const _si2=new Date(`${fecha}T${stV}:00`).toISOString(),_ei2=new Date(`${fecha}T${enV}:00`).toISOString();
+    const _ec=await cwCheckOverlap(fecha,_si2,_ei2,id);
+    if(_ec.length&&!cwOverlapWarn(_ec))return;
+  }
   btn.disabled=true;
   const updates={tipo,descripcion:desc,proyecto_id:proj};
   if(stV) updates.hora_inicio=new Date(`${fecha}T${stV}:00`).toISOString();
@@ -5055,7 +5114,7 @@ async function cwSaveEntryEdit(id,eid,fecha,btn){
   btn.disabled=false;
   if(error){alert('Error al guardar.');return;}
   showToast('Entrada actualizada ✓');
-  await loadCWToday(); await loadCWWeek();
+  await loadCWWeek(); loadAnlData();
 }
 
 async function deleteCWEntry(id,btn){
@@ -5063,10 +5122,10 @@ async function deleteCWEntry(id,btn){
   btn.disabled=true;
   const {error}=await supa.from('time_entries').delete().eq('id',id);
   if(error){btn.disabled=false;alert('Error al eliminar.');return;}
-  showToast('Entrada eliminada ✓'); await loadCWToday(); await loadCWWeek();
+  showToast('Entrada eliminada ✓'); await loadCWWeek(); loadAnlData();
 }
 
-function cwWeekNav(dir,reset=false){if(reset)cwWeekOffset=0;else cwWeekOffset+=dir;cwSelectedDay=null;loadCWWeek();}
+function cwWeekNav(dir,reset=false){if(reset){cwWeekOffset=0;cwSelectedDay=ldate();}else{cwWeekOffset+=dir;cwSelectedDay=null;}loadCWWeek();}
 
 async function loadCWWeek(){
   if(!supaUser?.id)return;
@@ -5080,7 +5139,14 @@ async function loadCWWeek(){
   const {data,error}=await supa.from('time_entries').select('*').eq('usuario_id',supaUser.id).gte('fecha',monStr).lte('fecha',sunStr).not('hora_fin','is',null);
   cwWeekEntries=error?[]:(data||[]);
   const tot=cwWeekEntries.reduce((a,e)=>a+entryDur(e),0);
-  const wt=document.getElementById('cw-week-total'); if(wt)wt.textContent=tot>0?`Total: ${fmtDur(tot)}`:'';
+  const weekTgt=cwWeekTarget(mon);
+  const wt=document.getElementById('cw-week-total');
+  if(wt){
+    if(tot>0){
+      const done=tot>=weekTgt;
+      wt.innerHTML=`<span style="color:${done?'#43a047':'var(--primary)'};">${fmtDur(tot)}</span><span style="font-size:11px;font-weight:400;color:var(--text2);margin-left:4px;">/ ${fmtDurH(weekTgt)}</span>`;
+    } else { wt.innerHTML=''; }
+  }
   renderCWWeekGrid(mon);
 }
 
@@ -5095,14 +5161,20 @@ function renderCWWeekGrid(monday){
     const de=cwWeekEntries.filter(e=>e.fecha===dStr);
     const sec=de.reduce((a,e)=>a+entryDur(e),0);
     const isT=d.getTime()===today.getTime(), isSel=cwSelectedDay===dStr;
-    const pct=Math.min(100,(sec/28800)*100);
+    const target=cwDayTarget(dStr);
+    const pct=target>0?Math.min(100,(sec/target)*100):0;
+    const done=target>0&&sec>=target;
+    const barColor=done?'#43a047':pct>=75?'#fb8c00':'var(--primary)';
+    const hoursLabel=sec>0?fmtDur(sec)+(done?' ✓':''):'—';
     const col=document.createElement('div');
     col.className='cw-day-col'+(isT?' cw-today':'')+(isSel?' cw-selected':'');
     col.onclick=()=>selectCWDay(dStr,de);
-    col.innerHTML=`<div class="cw-day-name">${DN[i]}</div><div class="cw-day-num">${d.getDate()}</div><div class="cw-day-hours">${sec>0?fmtDur(sec):'—'}</div><div class="cw-day-bar"><div class="cw-day-bar-fill" style="width:${pct}%;"></div></div>`;
+    col.innerHTML=`<div class="cw-day-name">${DN[i]}</div><div class="cw-day-num">${d.getDate()}</div><div class="cw-day-hours" style="${done?'color:#43a047':''}">${hoursLabel}</div><div class="cw-day-bar">${target>0?`<div class="cw-day-bar-fill" style="width:${pct}%;background:${barColor};"></div>`:''}</div>`;
     grid.appendChild(col);
   }
-  if(cwSelectedDay){const de=cwWeekEntries.filter(e=>e.fecha===cwSelectedDay);renderCWDayDetail(de);}
+  const detEl=document.getElementById('cw-week-detail');
+  if(cwSelectedDay){if(detEl)detEl.style.display='';const de=cwWeekEntries.filter(e=>e.fecha===cwSelectedDay);renderCWDayDetail(de);}
+  else if(detEl){detEl.style.display='none';detEl.innerHTML='';}
 }
 
 function selectCWDay(dStr,de){
@@ -5118,17 +5190,77 @@ function selectCWDay(dStr,de){
 function renderCWDayDetail(de){
   const det=document.getElementById('cw-week-detail'); if(!det)return;
   if(!de.length){det.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:12px;">Sin entradas</div>';return;}
+  const tipoOpts='<option value="">— Tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
+  const projOpts='<option value="">Sin proyecto</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
   const byTipo={};
   de.forEach(e=>{const t=e.tipo||'Sin tipo';byTipo[t]=(byTipo[t]||0)+entryDur(e);});
+  const tot=de.reduce((a,e)=>a+entryDur(e),0);
   const bar=Object.entries(byTipo).sort((a,b)=>b[1]-a[1]).map(([t,s])=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:9px;height:9px;border-radius:50%;background:${tipoColor(t)};flex-shrink:0;"></span><span style="font-weight:600;">${t}</span><span style="color:var(--text2);flex:1;text-align:right;">${fmtDur(s)}</span></div>`).join('');
   const rows=de.sort((a,b)=>new Date(a.hora_inicio)-new Date(b.hora_inicio)).map(e=>{
-    const fullDesc=`${e.tipo}_${e.descripcion||''}`, color=tipoColor(e.tipo);
+    const label=(e.tipo&&e.descripcion)?`${e.tipo}_${e.descripcion}`:e.tipo||e.descripcion||'(sin datos)';
+    const color=tipoColor(e.tipo);
+    const dur=fmtDur(entryDur(e));
     const st=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
     const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const stV=new Date(e.hora_inicio).toTimeString().slice(0,5);
+    const enV=new Date(e.hora_fin).toTimeString().slice(0,5);
     const pn=entryProjName(e);
-    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(fullDesc)}</div><div class="cw-entry-sub">${st}–${en}${pn?' · '+escapeHtml(pn):''}</div></div><span class="cw-entry-dur">${fmtDur(entryDur(e))}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
+    const eid=e.id.replace(/-/g,'');
+    return `<div style="border-radius:9px;border:1px solid var(--border2);overflow:hidden;background:var(--surface2);">
+      <div class="cw-entry" style="border:none;background:transparent;">
+        <span class="cw-tipo-dot" style="background:${color};"></span>
+        <div class="cw-entry-info">
+          <div class="cw-entry-desc">${escapeHtml(label)}</div>
+          <div class="cw-entry-sub">${st}–${en}${pn?' · '+escapeHtml(pn):''}</div>
+        </div>
+        <span class="cw-entry-dur">${dur}</span>
+        <button onclick="cwToggleEdit('${eid}')" title="Editar" style="background:none;border:none;color:var(--text2);cursor:pointer;padding:4px;border-radius:5px;font-size:15px;line-height:1;transition:.15s;" onmouseover="this.style.color='#1565C0'" onmouseout="this.style.color='var(--text2)'"><i class="ti ti-pencil"></i></button>
+        <button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button>
+      </div>
+      <div id="cwedit-${eid}" style="display:none;padding:10px 12px;border-top:1px solid var(--border2);background:var(--surface);">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--text2);font-weight:600;">DE</span>
+            <input type="time" value="${stV}" class="form-input" style="width:90px;font-size:12px;padding:5px 7px;" data-field="start">
+            <span style="font-size:11px;color:var(--text2);font-weight:600;">A</span>
+            <input type="time" value="${enV}" class="form-input" style="width:90px;font-size:12px;padding:5px 7px;" data-field="end">
+          </div>
+          <select class="form-select" style="flex:1;min-width:110px;font-size:12px;padding:5px 7px;" data-field="tipo">${tipoOpts}</select>
+          <input type="text" value="${escapeHtml(e.descripcion||'')}" class="form-input" placeholder="Descripción" maxlength="200" style="flex:2;min-width:130px;font-size:12px;padding:5px 8px;" data-field="desc">
+          <select class="form-select" style="flex:1;min-width:130px;font-size:12px;padding:5px 7px;" data-field="proj">${projOpts}</select>
+          <button onclick="cwSaveEntryEdit('${e.id}','${eid}','${e.fecha}',this)" class="btn btn-primary btn-sm" style="flex-shrink:0;font-size:12px;"><i class="ti ti-check"></i> Guardar</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
-  det.innerHTML=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;"><div style="flex:1;min-width:160px;background:var(--surface2);border-radius:9px;padding:10px 14px;"><div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px;">Por tipo</div><div style="display:flex;flex-direction:column;gap:5px;">${bar}</div></div></div><div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>`;
+  const target=cwSelectedDay?cwDayTarget(cwSelectedDay):0;
+  const pct=target>0?Math.min(100,(tot/target)*100):0;
+  const done=target>0&&tot>=target;
+  const barColor=done?'#43a047':pct>=75?'#fb8c00':'#1565C0';
+  const progressHtml=target>0?`
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:5px;">
+        <span style="font-weight:700;font-size:14px;color:${barColor};">${fmtDur(tot)}</span>
+        <span style="color:var(--text2);">objetivo <strong>${fmtDurH(target)}</strong></span>
+      </div>
+      <div style="background:var(--border2);border-radius:4px;height:7px;overflow:hidden;">
+        <div style="width:${pct}%;background:${barColor};border-radius:4px;height:100%;transition:.4s;"></div>
+      </div>
+      ${done?`<div style="font-size:11px;color:#43a047;font-weight:600;margin-top:4px;">✓ Objetivo completado</div>`:(target-tot>0?`<div style="font-size:11px;color:var(--text2);margin-top:4px;">Faltan ${fmtDurH(target-tot)}</div>`:'')}
+    </div>`:'';
+  det.innerHTML=`${progressHtml}<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px;">
+    <div style="background:var(--surface2);border-radius:9px;padding:8px 14px;flex:1;min-width:0;">
+      <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px;">Por tipo</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">${bar}</div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>`;
+  de.forEach(e=>{
+    const eid=e.id.replace(/-/g,'');
+    const box=document.getElementById(`cwedit-${eid}`); if(!box)return;
+    box.querySelector('[data-field="tipo"]').value=e.tipo||'';
+    box.querySelector('[data-field="proj"]').value=e.proyecto_id||'';
+  });
 }
 
 // ---- Admin: gestión de proyectos (compartido con Capacidad) ----
@@ -5456,47 +5588,27 @@ async function anlSendEmailReport(){
     <!-- Contenido principal -->
     <div id="fichaje-content" style="display:none;">
 
-      <!-- BANNER: cronómetro activo (se muestra solo cuando hay timer corriendo) -->
-      <div id="cw-running-banner" style="display:none;flex-direction:column;gap:8px;background:linear-gradient(135deg,#e8f5e9,#f1f8e9);border:1.5px solid #a5d6a7;border-radius:12px;padding:12px 16px;margin-bottom:12px;">
-        <!-- Fila 1: estado + timer + parar -->
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="width:10px;height:10px;border-radius:50%;background:#43a047;animation:cwpulse 1.4s infinite;flex-shrink:0;"></span>
+      <!-- BANNER: cronómetro activo -->
+      <div id="cw-running-banner" style="display:none;flex-direction:column;gap:6px;background:linear-gradient(135deg,#e8f5e9,#f1f8e9);border:1.5px solid #a5d6a7;border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+        <!-- Fila única: dot + label + timer + Parar -->
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#43a047;animation:cwpulse 1.4s infinite;flex-shrink:0;"></span>
           <div style="flex:1;min-width:0;">
-            <div id="cw-running-label" style="font-size:13px;font-weight:600;color:#1b5e20;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
-            <div id="cw-running-project" style="font-size:11px;color:#388e3c;margin-top:1px;"></div>
+            <div id="cw-running-label" style="font-size:12px;font-weight:600;color:#1b5e20;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+            <div id="cw-running-project" style="font-size:11px;color:#388e3c;"></div>
           </div>
-          <div id="cw-running-time" style="font-size:24px;font-weight:700;color:#2e7d32;font-variant-numeric:tabular-nums;flex-shrink:0;"></div>
-          <button onclick="stopCWTimer(this)" style="padding:7px 16px;background:#ef5350;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:5px;transition:.15s;" onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#ef5350'">
-            <i class="ti ti-square-filled" style="font-size:12px;"></i> Parar
+          <div id="cw-running-time" style="font-size:20px;font-weight:700;color:#2e7d32;font-variant-numeric:tabular-nums;flex-shrink:0;"></div>
+          <button onclick="stopCWTimer(this)" style="padding:5px 12px;background:#ef5350;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:4px;transition:.15s;" onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#ef5350'">
+            <i class="ti ti-square-filled" style="font-size:11px;"></i> Parar
           </button>
         </div>
-        <!-- Fila 2: edición en vivo -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px solid #c8e6c9;padding-top:8px;">
-          <input type="date" id="cw-running-date" title="Fecha" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;width:120px;" onchange="cwLiveUpdateStart()">
-          <input type="time" id="cw-running-start" title="Hora inicio" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;width:78px;" onchange="cwLiveUpdateStart()">
-          <select id="cw-running-tipo" title="Tipo de tarea" style="flex:1;min-width:110px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
-          <input type="text" id="cw-running-desc" placeholder="Descripción (opcional)" maxlength="200" style="flex:2;min-width:120px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;" oninput="cwLiveUpdateFields()">
-          <select id="cw-running-proj" title="Proyecto" style="flex:1;min-width:110px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
-        </div>
-      </div>
-
-      <!-- HOY (card principal) -->
-      <div class="card" style="margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span id="cw-today-total" style="font-size:15px;font-weight:700;color:var(--primary);"></span>
-            <!-- Botón iniciar: visible solo cuando NO hay timer corriendo -->
-            <div id="cw-start-wrap">
-              <button onclick="startCWTimer(this)" class="btn btn-primary btn-sm" style="gap:6px;">
-                <i class="ti ti-player-play-filled"></i> Iniciar
-              </button>
-            </div>
-            <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
-          </div>
-        </div>
-        <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
-          <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
+        <!-- Fila controles: edición en vivo -->
+        <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;border-top:1px solid #c8e6c9;padding-top:6px;">
+          <input type="date" id="cw-running-date" title="Fecha" style="border:1px solid #a5d6a7;border-radius:5px;padding:3px 5px;font-size:11px;background:#fff;color:#1b5e20;width:112px;" onchange="cwLiveUpdateStart()">
+          <input type="time" id="cw-running-start" title="Hora inicio" style="border:1px solid #a5d6a7;border-radius:5px;padding:3px 5px;font-size:11px;background:#fff;color:#1b5e20;width:72px;" onchange="cwLiveUpdateStart()">
+          <select id="cw-running-tipo" title="Tipo" style="flex:1;min-width:100px;border:1px solid #a5d6a7;border-radius:5px;padding:3px 5px;font-size:11px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
+          <input type="text" id="cw-running-desc" placeholder="Descripción" maxlength="200" style="flex:2;min-width:110px;border:1px solid #a5d6a7;border-radius:5px;padding:3px 6px;font-size:11px;background:#fff;color:#1b5e20;" oninput="cwLiveUpdateFields()">
+          <select id="cw-running-proj" title="Proyecto" style="flex:1;min-width:100px;border:1px solid #a5d6a7;border-radius:5px;padding:3px 5px;font-size:11px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
         </div>
       </div>
 
@@ -5526,22 +5638,32 @@ async function anlSendEmailReport(){
 
       <!-- VISTA SEMANAL -->
       <div class="card" style="margin-top:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-          <div class="card-title" style="margin:0;"><i class="ti ti-calendar-week"></i> Vista semanal</div>
-          <div style="display:flex;align-items:center;gap:6px;">
+        <!-- Header: nav siempre centrado, controles a la derecha -->
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-bottom:14px;">
+          <div></div>
+          <div style="display:flex;align-items:center;gap:5px;">
             <button onclick="cwWeekNav(-1)" class="btn btn-ghost btn-sm"><i class="ti ti-chevron-left"></i></button>
-            <span id="cw-week-label" style="font-size:13px;font-weight:600;color:var(--text);text-align:center;"></span>
+            <span id="cw-week-label" style="font-size:13px;font-weight:600;color:var(--text);text-align:center;white-space:nowrap;"></span>
             <button onclick="cwWeekNav(1)" class="btn btn-ghost btn-sm"><i class="ti ti-chevron-right"></i></button>
             <button onclick="cwWeekNav(0,true)" class="btn btn-ghost btn-sm" style="font-size:11px;">Esta semana</button>
           </div>
-          <span id="cw-week-total" style="font-size:14px;font-weight:700;color:var(--primary);"></span>
+          <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+            <span id="cw-week-total" style="font-size:14px;font-weight:700;color:var(--primary);"></span>
+            <div id="cw-start-wrap">
+              <button onclick="startCWTimer(this)" class="btn btn-primary btn-sm" style="gap:6px;">
+                <i class="ti ti-player-play-filled"></i> Iniciar
+              </button>
+            </div>
+            <button onclick="loadCWWeek()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
+          </div>
         </div>
-        <!-- Días de la semana -->
-        <div style="overflow-x:auto;">
-          <div id="cw-week-grid" style="display:grid;grid-template-columns:repeat(7,minmax(70px,1fr));gap:6px;margin-bottom:12px;min-width:490px;"></div>
+        <!-- Grid + detalle del día lado a lado -->
+        <div style="display:flex;gap:14px;align-items:flex-start;">
+          <div style="overflow-x:auto;flex-shrink:0;">
+            <div id="cw-week-grid" style="display:grid;grid-template-columns:repeat(7,minmax(70px,96px));gap:6px;min-width:490px;"></div>
+          </div>
+          <div id="cw-week-detail" style="display:none;flex:1;min-width:200px;border-left:1px solid var(--border2);padding-left:14px;"></div>
         </div>
-        <!-- Detalle del día seleccionado -->
-        <div id="cw-week-detail" style="border-top:1px solid var(--border2);padding-top:12px;display:none;"></div>
       </div>
 
       <!-- PANEL ADMIN: GESTIÓN DE PROYECTOS -->
