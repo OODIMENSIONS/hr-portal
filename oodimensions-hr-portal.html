@@ -3236,7 +3236,9 @@ function buildTable() {
     : usuariosCache.filter(u => u.id === supaUser?.id);
 
   let h1 = '<tr><th class="col-name" rowspan="2">Nombre</th>';
-  h1 += '<th rowspan="2" style="text-align:right;">Vac.<br/>2026</th>';
+  h1 += '<th rowspan="2" style="text-align:right;">Vac.<br/>\'26</th>';
+  h1 += '<th rowspan="2" style="text-align:right;color:#1565C0;">Arr.<br/>\'25</th>';
+  h1 += '<th rowspan="2" style="text-align:right;border-left:2px solid rgba(255,255,255,.2);">Total</th>';
   h1 += '<th rowspan="2" style="text-align:right;">Asig.</th>';
   h1 += '<th rowspan="2" style="text-align:right;">Disfr.</th>';
   h1 += '<th rowspan="2" class="col-sep" style="text-align:right;color:#c62828;">Pend.</th>';
@@ -3269,7 +3271,9 @@ function buildTable() {
     const pend     = Math.max(0, total - asig);
     const fmt = n => Number.isInteger(n)?n:n.toFixed(1);
     rows += `<tr><td class="col-name">${u.nombre}</td>`;
-    rows += `<td class="num">${fmt(total)}</td>`;
+    rows += `<td class="num">${fmt(base2026u)}</td>`;
+    rows += `<td class="num" style="${arrEfectivos>0?'color:#1565C0;font-weight:600;':''}">${arrEfectivos>0?'+'+fmt(arrEfectivos):'—'}</td>`;
+    rows += `<td class="num" style="font-weight:600;border-left:2px solid var(--border2);">${fmt(total)}</td>`;
     rows += `<td class="num">${fmt(asig)}</td>`;
     rows += `<td class="num">${fmt(disfr)}</td>`;
     rows += `<td class="num col-sep ${pend>0?'num-warn':'num-ok'}">${fmt(pend)}</td>`;
