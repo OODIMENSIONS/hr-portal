@@ -1133,13 +1133,19 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
 <!-- ==================== MODAL CONTRASEÑA PRIMER ACCESO ==================== -->
 <div class="modal-overlay open" id="password-setup-modal" style="display:none;z-index:500;">
   <div class="modal" style="max-width:420px;">
-    <div class="modal-header"><span class="modal-title"><i class="ti ti-shield-lock"></i> Configura tu contraseña</span></div>
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-shield-lock"></i> Configura tu contraseña</span>
+      <button class="modal-close" onclick="cancelPasswordSetup()" title="Volver al login">✕</button>
+    </div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:1.25rem;">Es tu primer acceso. Por seguridad, elige una contraseña única para esta plataforma — no uses la de otro servicio.</p>
     <div id="pw-strength" style="font-size:12px;margin-bottom:1rem;padding:10px 12px;border-radius:var(--r);background:var(--surface2);display:none;"></div>
     <div class="form-group"><label class="form-label">Nueva contraseña</label><input type="password" id="new-pw" placeholder="Mínimo 8 caracteres, mayúscula, número y símbolo" oninput="checkPwStrength()"/></div>
     <div class="form-group"><label class="form-label">Confirmar contraseña</label><input type="password" id="new-pw2" placeholder="Repite la contraseña"/></div>
     <div id="pw-error" style="font-size:13px;color:#c62828;margin-bottom:.75rem;display:none;"></div>
     <button class="btn btn-grad" style="width:100%;justify-content:center;" onclick="saveNewPassword(this)"><i class="ti ti-check"></i> Guardar y entrar</button>
+    <div style="text-align:center;margin-top:10px;">
+      <button type="button" onclick="cancelPasswordSetup()" style="background:none;border:none;color:var(--text2);font-size:12px;cursor:pointer;text-decoration:underline;">← Volver y cambiar cuenta</button>
+    </div>
   </div>
 </div>
 
@@ -1544,6 +1550,19 @@ async function doLogin() {
   }
   await loadUserProfile(data.user);
   showApp();
+}
+
+async function cancelPasswordSetup() {
+  document.getElementById('password-setup-modal').style.display = 'none';
+  document.querySelector('.app').style.display = 'none';
+  await supa.auth.signOut();
+  supaUser = null; supaProfile = null;
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-error').classList.remove('visible');
+  document.getElementById('login-btn').disabled = false;
+  document.getElementById('login-btn').innerHTML = '<i class="ti ti-login"></i> Entrar';
+  document.getElementById('login-screen').classList.add('visible');
+  setTimeout(()=>document.getElementById('login-email').focus(), 100);
 }
 
 async function doLogout() {
