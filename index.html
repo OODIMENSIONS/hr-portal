@@ -501,7 +501,9 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
 
   <!-- Tabs -->
   <div class="tabs-bar">
-    <button class="tab active" onclick="showTab('vacaciones',this)"><i class="ti ti-beach"></i> Vacaciones</button>
+    <button class="tab active" id="tab-btn-fichaje" onclick="showTab('fichaje',this)"><i class="ti ti-clock-play"></i> Fichaje</button>
+    <button class="tab" id="tab-btn-analisis" onclick="showTab('analisis',this)"><i class="ti ti-chart-bar"></i> Análisis</button>
+    <button class="tab" onclick="showTab('vacaciones',this)"><i class="ti ti-beach"></i> Vacaciones</button>
     <button class="tab" onclick="showTab('calendario',this)"><i class="ti ti-calendar"></i> Calendario</button>
     <button class="tab admin-only" onclick="showTab('festivos',this)"><i class="ti ti-flag"></i> Festivos</button>
     <button class="tab" onclick="showTab('tabla',this)"><i class="ti ti-table"></i> Vista tabla</button>
@@ -510,8 +512,6 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
     <button class="tab" onclick="showTab('equipo',this)"><i class="ti ti-users"></i> Equipo</button>
     <button class="tab" onclick="showTab('politica',this)"><i class="ti ti-book"></i> Política</button>
     <button class="tab admin-only" onclick="showTab('capacidad',this)"><i class="ti ti-layout-kanban"></i> Capacidad</button>
-    <button class="tab" id="tab-btn-fichaje" onclick="showTab('fichaje',this)"><i class="ti ti-clock-play"></i> Fichaje</button>
-    <button class="tab" id="tab-btn-analisis" onclick="showTab('analisis',this)"><i class="ti ti-chart-bar"></i> Análisis</button>
   </div>
 
   <!-- ==================== VACACIONES ==================== -->
@@ -1627,6 +1627,8 @@ async function continueShowApp() {
   try { onReqTypeChange('A'); resetRequestForm(); } catch(e) {}
   loadNotifications().catch(()=>{});
   resetIdleTimer();
+  // Abrir Fichaje por defecto
+  showTab('fichaje', document.getElementById('tab-btn-fichaje'));
 }
 
 function checkPwStrength() {
@@ -3564,7 +3566,7 @@ function setRole(role,btn){
   ['vac','hor','aus'].forEach(k=>{const b=document.getElementById('btn-edit-'+k);if(b)b.style.display=role==='admin'?'':'none';});
   if(role==='employee'){
     const at=document.querySelector('.tab.admin-only.active');
-    if(at && !canApproveVac) showTab('vacaciones', document.querySelector('.tab:not(.admin-only)'));
+    if(at && !canApproveVac) showTab('fichaje', document.getElementById('tab-btn-fichaje'));
   }
   renderCal();
 }
@@ -5175,11 +5177,15 @@ async function initAnalisis(){
       document.getElementById('anl-user-wrap').style.display='';
       const sel=document.getElementById('anl-user');
       sel.innerHTML='<option value="">Todos</option>'+anlUsers.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)}</option>`).join('');
-      document.querySelectorAll('.admin-only').forEach(el=>el.style.display='');
+      document.querySelectorAll('#tab-analisis .admin-only').forEach(el=>el.style.display='');
       document.getElementById('anl-admin-projects').style.display='';
       await renderCWAdminProjects();
     }
     anlLoaded=true;
+  } else {
+    // Refrescar proyectos por si cambiaron desde Fichaje
+    const {data}=await supa.from('cap_proyectos').select('id,nombre,cliente,color').order('nombre');
+    anlProjects=data||[];
   }
   await loadAnlData();
 }
