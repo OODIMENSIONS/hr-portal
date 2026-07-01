@@ -4758,6 +4758,7 @@ async function saveAddEmployee() {
 }
 
 // ===== FICHAJE =====
+const ldate=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const TIPOS_TAREA = [
   { id:'Admin',         desc:'Gestión de empresa, personal…',                             color:'#78909C' },
   { id:'Design',        desc:'Diseño de interfaz de usuario',                             color:'#EC407A' },
@@ -4797,7 +4798,7 @@ async function initClockify(){
   if(sel) sel.innerHTML='<option value="">— Selecciona tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
   const tbody=document.getElementById('cw-guide-tbody');
   if(tbody) tbody.innerHTML=TIPOS_TAREA.map(t=>`<tr class="cw-guide-row"><td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:${t.color};display:inline-block;"></span><strong>${t.id}</strong></span></td><td style="color:var(--text2);">${t.desc}</td></tr>`).join('');
-  const today=new Date().toISOString().split('T')[0];
+  const today=ldate();
   const md=document.getElementById('cw-manual-date'); if(md) md.value=today;
   await Promise.all([loadCWProjects(),checkRunningCWTimer()]);
   await loadCWToday(); cwWeekOffset=0; await loadCWWeek();
@@ -4831,7 +4832,9 @@ function showRunningBanner(){
   cwRefreshRunningLabel();
   startTimerDisplay();
   // Rellenar los campos de edición en vivo
-  const startTime=new Date(cwRunningEntry.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+  const startDt=new Date(cwRunningEntry.hora_inicio);
+  const rd=document.getElementById('cw-running-date'); if(rd)rd.value=cwRunningEntry.fecha||ldate(startDt);
+  const startTime=startDt.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
   const rs=document.getElementById('cw-running-start'); if(rs)rs.value=startTime;
   const rt=document.getElementById('cw-running-tipo');
   if(rt){
@@ -4871,11 +4874,11 @@ function cwLiveUpdateFields(){
 }
 async function cwLiveUpdateStart(){
   if(!cwRunningEntry)return;
-  const val=document.getElementById('cw-running-start').value; if(!val)return;
-  const fecha=cwRunningEntry.hora_inicio.split('T')[0];
-  const newStart=new Date(`${fecha}T${val}:00`).toISOString();
-  cwRunningEntry={...cwRunningEntry,hora_inicio:newStart};
-  await supa.from('time_entries').update({hora_inicio:newStart}).eq('id',cwRunningEntry.id);
+  const timeVal=document.getElementById('cw-running-start').value; if(!timeVal)return;
+  const dateVal=document.getElementById('cw-running-date').value||ldate();
+  const newStart=new Date(`${dateVal}T${timeVal}:00`).toISOString();
+  cwRunningEntry={...cwRunningEntry,hora_inicio:newStart,fecha:dateVal};
+  await supa.from('time_entries').update({hora_inicio:newStart,fecha:dateVal}).eq('id',cwRunningEntry.id);
 }
 function hideRunningBanner(){
   const b=document.getElementById('cw-running-banner'); if(b)b.style.display='none';
@@ -4912,7 +4915,7 @@ async function startCWTimer(btn){
   const tipo=document.getElementById('cw-tipo').value||null;
   const desc=document.getElementById('cw-desc').value.trim()||null;
   const projId=document.getElementById('cw-project').value||null;
-  const today=new Date().toISOString().split('T')[0];
+  const today=ldate();
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Iniciando…';
   const {data,error}=await supa.from('time_entries').insert({
     usuario_id:supaUser.id, tipo, descripcion:desc,
@@ -4925,6 +4928,8 @@ async function startCWTimer(btn){
 
 async function stopCWTimer(btn){
   if(!cwRunningEntry)return;
+  if(!cwRunningEntry.tipo){showToast('Indica el tipo de tarea antes de parar ⚠️');return;}
+  if(!cwRunningEntry.proyecto_id){showToast('Selecciona el proyecto antes de parar ⚠️');return;}
   btn.disabled=true; btn.textContent='Parando…';
   const {error}=await supa.from('time_entries').update({hora_fin:new Date().toISOString()}).eq('id',cwRunningEntry.id);
   btn.disabled=false;
@@ -4955,7 +4960,7 @@ async function addManualCWEntry(btn){
 
 async function loadCWToday(){
   if(!supaUser?.id)return;
-  const today=new Date().toISOString().split('T')[0];
+  const today=ldate();
   const {data,error}=await supa.from('time_entries').select('*').eq('usuario_id',supaUser.id).eq('fecha',today).not('hora_fin','is',null).order('hora_inicio',{ascending:false});
   const list=document.getElementById('cw-today-list'), totEl=document.getElementById('cw-today-total');
   if(error){if(list)list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:16px;">Error al cargar</div>';return;}
@@ -5054,7 +5059,7 @@ async function loadCWWeek(){
   const sun=new Date(mon); sun.setDate(mon.getDate()+6);
   const fmt=d=>d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
   const wl=document.getElementById('cw-week-label'); if(wl)wl.textContent=`${fmt(mon)} – ${fmt(sun)}`;
-  const monStr=mon.toISOString().split('T')[0], sunStr=sun.toISOString().split('T')[0];
+  const monStr=ldate(mon), sunStr=ldate(sun);
   const {data,error}=await supa.from('time_entries').select('*').eq('usuario_id',supaUser.id).gte('fecha',monStr).lte('fecha',sunStr).not('hora_fin','is',null);
   cwWeekEntries=error?[]:(data||[]);
   const tot=cwWeekEntries.reduce((a,e)=>a+entryDur(e),0);
@@ -5069,7 +5074,7 @@ function renderCWWeekGrid(monday){
   grid.innerHTML='';
   for(let i=0;i<7;i++){
     const d=new Date(monday); d.setDate(monday.getDate()+i);
-    const dStr=d.toISOString().split('T')[0];
+    const dStr=ldate(d);
     const de=cwWeekEntries.filter(e=>e.fecha===dStr);
     const sec=de.reduce((a,e)=>a+entryDur(e),0);
     const isT=d.getTime()===today.getTime(), isSel=cwSelectedDay===dStr;
@@ -5167,8 +5172,8 @@ async function initAnalisis(){
   if(!anlLoaded){
     const now=new Date();
     const y=now.getFullYear(), m=now.getMonth();
-    document.getElementById('anl-from').value=new Date(y,m,1).toISOString().split('T')[0];
-    document.getElementById('anl-to').value=new Date(y,m+1,0).toISOString().split('T')[0];
+    document.getElementById('anl-from').value=ldate(new Date(y,m,1));
+    document.getElementById('anl-to').value=ldate(new Date(y,m+1,0));
     const [r1,r2]=await Promise.all([
       supa.from('cap_proyectos').select('id,nombre,cliente,color').order('nombre'),
       supaProfile?.rol==='admin'?supa.from('usuarios').select('id,nombre,email'):Promise.resolve({data:[]}),
@@ -5199,8 +5204,8 @@ function anlSetPeriod(p){
   else if(p==='month'){from=new Date(now.getFullYear(),now.getMonth(),1);to=new Date(now.getFullYear(),now.getMonth()+1,0);}
   else if(p==='prevmonth'){from=new Date(now.getFullYear(),now.getMonth()-1,1);to=new Date(now.getFullYear(),now.getMonth(),0);}
   else if(p==='year'){from=new Date(now.getFullYear(),0,1);to=new Date(now.getFullYear(),11,31);}
-  document.getElementById('anl-from').value=from.toISOString().split('T')[0];
-  document.getElementById('anl-to').value=to.toISOString().split('T')[0];
+  document.getElementById('anl-from').value=ldate(from);
+  document.getElementById('anl-to').value=ldate(to);
   loadAnlData();
 }
 
@@ -5456,6 +5461,8 @@ async function anlSendEmailReport(){
         <!-- Edición en vivo del timer activo -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid #c8e6c9;padding-top:10px;">
           <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+            <span style="font-size:11px;color:#388e3c;font-weight:600;">FECHA</span>
+            <input type="date" id="cw-running-date" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;width:130px;" onchange="cwLiveUpdateStart()">
             <span style="font-size:11px;color:#388e3c;font-weight:600;">INICIO</span>
             <input type="time" id="cw-running-start" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;width:80px;" onchange="cwLiveUpdateStart()">
           </div>
