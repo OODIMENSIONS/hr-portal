@@ -388,6 +388,30 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
 .guide-step::before { counter-increment:step; content:counter(step); min-width:24px; height:24px; border-radius:50%; background:var(--grad); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
 .guide-tip { display:flex; gap:10px; align-items:flex-start; background:#F0FDF4; border:1px solid #BBF7D0; border-radius:var(--r); padding:12px 14px; margin-top:12px; font-size:12.5px; line-height:1.65; color:#14532d; }
 .guide-tip i { font-size:16px; color:#16a34a; flex-shrink:0; margin-top:1px; }
+/* ===== FICHAJE ===== */
+@keyframes cwpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+@keyframes spin { to{transform:rotate(360deg)} }
+.cw-entry { display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:9px;background:var(--surface2);border:1px solid var(--border2);transition:.15s; }
+.cw-entry:hover { border-color:var(--border); }
+.cw-tipo-dot { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
+.cw-entry-info { flex:1;min-width:0; }
+.cw-entry-desc { font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.cw-entry-sub { font-size:11px;color:var(--text2);margin-top:1px; }
+.cw-entry-dur { font-size:13px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;flex-shrink:0; }
+.cw-entry-del { background:none;border:none;color:var(--text2);cursor:pointer;padding:4px;border-radius:5px;font-size:15px;flex-shrink:0;transition:.15s;line-height:1; }
+.cw-entry-del:hover { color:#ef5350;background:#fce4ec; }
+.cw-day-col { border-radius:10px;border:1.5px solid var(--border2);padding:10px 8px;cursor:pointer;transition:.15s;text-align:center;background:var(--surface); }
+.cw-day-col:hover { border-color:var(--primary);background:var(--surface2); }
+.cw-day-col.cw-today { border-color:#1565C0;background:#e3f2fd; }
+.cw-day-col.cw-selected { border-image:var(--grad) 1;border-width:2px;border-style:solid; }
+.cw-day-name { font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px; }
+.cw-day-num { font-size:18px;font-weight:700;color:var(--text);line-height:1.2; }
+.cw-day-hours { font-size:12px;font-weight:700;color:var(--primary);margin-top:3px; }
+.cw-day-bar { height:4px;border-radius:2px;margin-top:6px;background:var(--border2);overflow:hidden; }
+.cw-day-bar-fill { height:100%;border-radius:2px;background:var(--grad);transition:.3s; }
+.cw-guide-row { border-bottom:1px solid var(--border2); }
+.cw-guide-row td { padding:7px 12px;vertical-align:top; }
+.cw-guide-row:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -485,6 +509,7 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
     <button class="tab" onclick="showTab('equipo',this)"><i class="ti ti-users"></i> Equipo</button>
     <button class="tab" onclick="showTab('politica',this)"><i class="ti ti-book"></i> Política</button>
     <button class="tab admin-only" onclick="showTab('capacidad',this)"><i class="ti ti-layout-kanban"></i> Capacidad</button>
+    <button class="tab" id="tab-btn-fichaje" onclick="showTab('fichaje',this)"><i class="ti ti-clock-play"></i> Fichaje</button>
   </div>
 
   <!-- ==================== VACACIONES ==================== -->
@@ -3504,6 +3529,7 @@ function showTab(name,btn){
   }
   if(name==='aprobaciones') buildOverlapCal();
   if(name==='equipo') renderEquipoTab();
+  if(name==='fichaje') initClockify();
   if(name==='festivos') {
     festYear = new Date().getFullYear();
     renderFestCal();
@@ -4726,7 +4752,448 @@ async function saveAddEmployee() {
   });
 }
 
+// ===== FICHAJE (CLOCKIFY) =====
+const TIPOS_TAREA = [
+  { id:'Admin',         desc:'Gestión de empresa, personal…',                             color:'#78909C' },
+  { id:'Design',        desc:'Diseño de interfaz de usuario',                             color:'#EC407A' },
+  { id:'Documentation', desc:'Planos, memorias, guías…',                                 color:'#5C6BC0' },
+  { id:'Coordination',  desc:'Preparación y revisión de modelos, clash detection…',      color:'#26A69A' },
+  { id:'Management',    desc:'Gestión de proyectos, equipos, tareas, auditorías…',       color:'#EF6C00' },
+  { id:'Marketing',     desc:'Tareas comerciales, publicaciones en redes…',              color:'#AB47BC' },
+  { id:'Meetings',      desc:'Reuniones internas y con clientes',                         color:'#EF5350' },
+  { id:'Modeling',      desc:'Tareas de modelado BIM / CAD',                             color:'#1E88E5' },
+  { id:'Operations',    desc:'Copia de BBDD, limpieza de registros, mantenimiento…',     color:'#6D4C41' },
+  { id:'Planning',      desc:'Estudio de propuestas, preparación previa…',               color:'#FFA726' },
+  { id:'Programming',   desc:'Dynamo, código, scripts, mantenimiento de herramientas…',  color:'#43A047' },
+  { id:'Research',      desc:'Investigación, benchmarking…',                             color:'#00ACC1' },
+  { id:'Training',      desc:'Formación, cursos, eventos, certificaciones…',             color:'#FF7043' },
+];
+
+let cwWorkspaceId=null, cwProjects=[], cwTimerInterval=null, cwRunningEntry=null;
+let cwWeekOffset=0, cwSelectedDay=null, cwWeekEntries=[];
+
+const tipoColor=id=>(TIPOS_TAREA.find(t=>t.id===id)||{color:'#90A4AE'}).color;
+const tipoDesc =id=>(TIPOS_TAREA.find(t=>t.id===id)||{desc:''}).desc;
+
+async function clockifyApi(path,method='GET',body=null){
+  const {data:{session}}=await supa.auth.getSession();
+  if(!session)return null;
+  try{
+    const r=await fetch('https://xezltxsmxyvgwisiemqf.supabase.co/functions/v1/clockify-proxy',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+session.access_token,'Content-Type':'application/json'},
+      body:JSON.stringify({path,method,body}),
+    });
+    const txt=await r.text();
+    if(!r.ok){console.error('CW',r.status,txt);return null;}
+    return JSON.parse(txt);
+  }catch(e){console.error('CW',e);return null;}
+}
+
+async function initClockify(){
+  ['fichaje-loading','fichaje-content','fichaje-no-config','fichaje-error'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none';
+  });
+  document.getElementById('fichaje-loading').style.display='';
+  if(!supaProfile?.clockify_user_id){
+    document.getElementById('fichaje-loading').style.display='none';
+    document.getElementById('fichaje-no-config').style.display='';
+    return;
+  }
+  const ws=await clockifyApi('/workspaces');
+  if(!ws||!ws.length){
+    document.getElementById('fichaje-loading').style.display='none';
+    document.getElementById('fichaje-error').style.display='';
+    document.getElementById('fichaje-error-msg').textContent='No se pudo conectar con Clockify. Verifica que la API key esté configurada en Supabase (CLOCKIFY_API_KEY).';
+    return;
+  }
+  cwWorkspaceId=ws[0].id;
+  const sel=document.getElementById('cw-tipo');
+  if(sel) sel.innerHTML='<option value="">— Selecciona tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
+  const tbody=document.getElementById('cw-guide-tbody');
+  if(tbody) tbody.innerHTML=TIPOS_TAREA.map(t=>`<tr class="cw-guide-row"><td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:${t.color};display:inline-block;"></span><strong>${t.id}</strong></span></td><td style="color:var(--text2);">${t.desc}</td></tr>`).join('');
+  const today=new Date().toISOString().split('T')[0];
+  const md=document.getElementById('cw-manual-date'); if(md) md.value=today;
+  await Promise.all([loadCWProjects(),checkRunningCWTimer()]);
+  await loadCWToday(); cwWeekOffset=0; await loadCWWeek();
+  document.getElementById('fichaje-loading').style.display='none';
+  document.getElementById('fichaje-content').style.display='';
+}
+
+async function loadCWProjects(){
+  if(!cwWorkspaceId)return;
+  const p=await clockifyApi(`/workspaces/${cwWorkspaceId}/projects?archived=false&page-size=200`);
+  if(!p)return; cwProjects=p;
+  const sel=document.getElementById('cw-project');
+  if(sel) sel.innerHTML='<option value="">Sin proyecto asignado</option>'+cwProjects.map(pr=>`<option value="${pr.id}">${escapeHtml(pr.name)}</option>`).join('');
+}
+
+async function checkRunningCWTimer(){
+  if(!cwWorkspaceId||!supaProfile?.clockify_user_id)return;
+  const entries=await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${supaProfile.clockify_user_id}/time-entries?in-progress=true&page-size=1`);
+  if(entries&&entries.length>0){cwRunningEntry=entries[0];showRunningBanner();}
+  else{cwRunningEntry=null;hideRunningBanner();}
+}
+
+function showRunningBanner(){
+  if(!cwRunningEntry)return;
+  const banner=document.getElementById('cw-running-banner'); if(!banner)return;
+  banner.style.display='flex';
+  const desc=cwRunningEntry.description||'';
+  const tipo=desc.split('_')[0]||'';
+  document.getElementById('cw-running-label').textContent=desc||'(sin descripción)';
+  banner.querySelector('span').style.background=tipoColor(tipo);
+  const proj=cwProjects.find(p=>p.id===cwRunningEntry.projectId);
+  document.getElementById('cw-running-project').textContent=proj?proj.name:'';
+  startTimerDisplay();
+}
+function hideRunningBanner(){
+  const b=document.getElementById('cw-running-banner'); if(b)b.style.display='none';
+  if(cwTimerInterval){clearInterval(cwTimerInterval);cwTimerInterval=null;}
+}
+function startTimerDisplay(){
+  if(cwTimerInterval)clearInterval(cwTimerInterval);
+  cwTimerInterval=setInterval(()=>{
+    if(!cwRunningEntry)return;
+    const elapsed=Math.floor((Date.now()-new Date(cwRunningEntry.timeInterval.start).getTime())/1000);
+    const h=Math.floor(elapsed/3600),m=Math.floor((elapsed%3600)/60),s=elapsed%60;
+    const el=document.getElementById('cw-running-time');
+    if(el)el.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  },1000);
+}
+
+function updateCWPreview(){
+  const tipo=document.getElementById('cw-tipo').value;
+  const desc=document.getElementById('cw-desc').value.trim();
+  const projId=document.getElementById('cw-project').value;
+  const proj=cwProjects.find(p=>p.id===projId);
+  const td=document.getElementById('cw-tipo-desc'); if(td)td.textContent=tipo?tipoDesc(tipo):'';
+  const dot=document.getElementById('cw-preview-tipo-dot'); if(dot)dot.style.background=tipo?tipoColor(tipo):'var(--border2)';
+  document.getElementById('cw-preview-desc').textContent=tipo?(desc?`${tipo}_${desc}`:`${tipo}_`):(desc||'—');
+  document.getElementById('cw-preview-project').textContent=proj?proj.name:'Sin proyecto';
+  const vi=document.getElementById('cw-valid-icon'), vm=document.getElementById('cw-valid-msg');
+  if(tipo&&desc){vi.textContent='✅';vm.style.display='none';}
+  else if(tipo&&!desc){vi.textContent='⚠️';vm.style.display='';vm.style.color='#e65100';vm.textContent='Falta la descripción (TipoTarea_descripción)';}
+  else if(!tipo&&desc){vi.textContent='⚠️';vm.style.display='';vm.style.color='#e65100';vm.textContent='Selecciona el tipo de tarea';}
+  else{vi.textContent='';vm.style.display='none';}
+}
+
+async function startCWTimer(btn){
+  const tipo=document.getElementById('cw-tipo').value, desc=document.getElementById('cw-desc').value.trim();
+  if(!tipo){alert('Selecciona el tipo de tarea.');return;}
+  if(!desc){alert('Añade una descripción.');return;}
+  const projId=document.getElementById('cw-project').value||undefined;
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Iniciando…';
+  const entry=await clockifyApi(`/workspaces/${cwWorkspaceId}/time-entries`,'POST',{start:new Date().toISOString(),description:`${tipo}_${desc}`,projectId:projId,billable:false});
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-player-play-filled"></i> Iniciar cronómetro';
+  if(!entry){alert('Error al iniciar el timer en Clockify.');return;}
+  cwRunningEntry=entry; showRunningBanner(); showToast('Cronómetro iniciado ✓');
+}
+
+async function stopCWTimer(btn){
+  if(!cwRunningEntry)return;
+  btn.disabled=true; btn.textContent='Parando…';
+  await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${supaProfile.clockify_user_id}/time-entries`,'PATCH',{end:new Date().toISOString()});
+  btn.disabled=false; cwRunningEntry=null; hideRunningBanner();
+  showToast('Entrada registrada en Clockify ✓');
+  await loadCWToday(); await loadCWWeek();
+}
+
+async function addManualCWEntry(btn){
+  const tipo=document.getElementById('cw-tipo').value, desc=document.getElementById('cw-desc').value.trim();
+  const startT=document.getElementById('cw-manual-start').value, endT=document.getElementById('cw-manual-end').value;
+  const dateV=document.getElementById('cw-manual-date').value;
+  if(!tipo){alert('Selecciona el tipo de tarea.');return;}
+  if(!desc){alert('Añade una descripción.');return;}
+  if(!startT||!endT||!dateV){alert('Indica fecha y hora.');return;}
+  if(startT>=endT){alert('La hora de fin debe ser posterior a la de inicio.');return;}
+  const projId=document.getElementById('cw-project').value||undefined;
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>';
+  const entry=await clockifyApi(`/workspaces/${cwWorkspaceId}/time-entries`,'POST',{
+    start:new Date(`${dateV}T${startT}:00`).toISOString(),end:new Date(`${dateV}T${endT}:00`).toISOString(),
+    description:`${tipo}_${desc}`,projectId:projId,billable:false,
+  });
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-plus"></i> Añadir';
+  if(!entry){alert('Error al crear la entrada.');return;}
+  showToast('Entrada añadida ✓'); await loadCWToday(); await loadCWWeek();
+}
+
+const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${h}h ${String(m).padStart(2,'0')}m`:`${m}m ${String(sec).padStart(2,'0')}s`;};
+const entryDur=e=>{const s=new Date(e.timeInterval.start),en=e.timeInterval.end?new Date(e.timeInterval.end):new Date();return Math.floor((en-s)/1000);};
+
+async function loadCWToday(){
+  if(!cwWorkspaceId||!supaProfile?.clockify_user_id)return;
+  const uid=supaProfile.clockify_user_id, now=new Date();
+  const s0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString();
+  const s1=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59).toISOString();
+  const entries=await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${uid}/time-entries?start=${s0}&end=${s1}&page-size=50`);
+  const list=document.getElementById('cw-today-list'), totEl=document.getElementById('cw-today-total');
+  if(!entries){if(list)list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:16px;">Error al cargar</div>';return;}
+  const fin=entries.filter(e=>e.timeInterval.end);
+  const tot=fin.reduce((a,e)=>a+entryDur(e),0);
+  if(totEl)totEl.textContent=tot>0?fmtDur(tot):'';
+  if(!list)return;
+  if(!fin.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px;">Sin entradas hoy todavía</div>';return;}
+  list.innerHTML=fin.sort((a,b)=>new Date(b.timeInterval.start)-new Date(a.timeInterval.start)).map(e=>{
+    const desc=e.description||'(sin descripción)',tipo=desc.split('_')[0],color=tipoColor(tipo);
+    const dur=fmtDur(entryDur(e));
+    const st=new Date(e.timeInterval.start).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.timeInterval.end).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const proj=cwProjects.find(p=>p.id===e.projectId);
+    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(desc)}</div><div class="cw-entry-sub">${st}–${en}${proj?' · '+escapeHtml(proj.name):''}</div></div><span class="cw-entry-dur">${dur}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
+  }).join('');
+}
+
+async function deleteCWEntry(id,btn){
+  if(!confirm('¿Eliminar esta entrada de Clockify?'))return;
+  btn.disabled=true;
+  await clockifyApi(`/workspaces/${cwWorkspaceId}/time-entries/${id}`,'DELETE');
+  showToast('Entrada eliminada ✓'); await loadCWToday(); await loadCWWeek();
+}
+
+function cwWeekNav(dir,reset=false){if(reset)cwWeekOffset=0;else cwWeekOffset+=dir;cwSelectedDay=null;loadCWWeek();}
+
+async function loadCWWeek(){
+  if(!cwWorkspaceId||!supaProfile?.clockify_user_id)return;
+  const uid=supaProfile.clockify_user_id, now=new Date();
+  const dow=(now.getDay()+6)%7;
+  const mon=new Date(now); mon.setDate(now.getDate()-dow+cwWeekOffset*7); mon.setHours(0,0,0,0);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+  const fmt=d=>d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
+  const wl=document.getElementById('cw-week-label'); if(wl)wl.textContent=`${fmt(mon)} – ${fmt(sun)}`;
+  const entries=await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${uid}/time-entries?start=${mon.toISOString()}&end=${sun.toISOString()}&page-size=200`);
+  cwWeekEntries=(entries||[]).filter(e=>e.timeInterval.end);
+  const tot=cwWeekEntries.reduce((a,e)=>a+entryDur(e),0);
+  const wt=document.getElementById('cw-week-total'); if(wt)wt.textContent=tot>0?`Total: ${fmtDur(tot)}`:'';
+  renderCWWeekGrid(mon);
+}
+
+function renderCWWeekGrid(monday){
+  const grid=document.getElementById('cw-week-grid'); if(!grid)return;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  grid.innerHTML='';
+  for(let i=0;i<7;i++){
+    const d=new Date(monday); d.setDate(monday.getDate()+i);
+    const dStr=d.toISOString().split('T')[0];
+    const de=cwWeekEntries.filter(e=>e.timeInterval.start.startsWith(dStr));
+    const sec=de.reduce((a,e)=>a+entryDur(e),0);
+    const isT=d.getTime()===today.getTime(), isSel=cwSelectedDay===dStr;
+    const pct=Math.min(100,(sec/28800)*100);
+    const col=document.createElement('div');
+    col.className='cw-day-col'+(isT?' cw-today':'')+(isSel?' cw-selected':'');
+    col.onclick=()=>selectCWDay(dStr,de);
+    col.innerHTML=`<div class="cw-day-name">${DN[i]}</div><div class="cw-day-num">${d.getDate()}</div><div class="cw-day-hours">${sec>0?fmtDur(sec):'—'}</div><div class="cw-day-bar"><div class="cw-day-bar-fill" style="width:${pct}%;"></div></div>`;
+    grid.appendChild(col);
+  }
+  if(cwSelectedDay){const de=cwWeekEntries.filter(e=>e.timeInterval.start.startsWith(cwSelectedDay));renderCWDayDetail(de);}
+}
+
+function selectCWDay(dStr,de){
+  cwSelectedDay=cwSelectedDay===dStr?null:dStr;
+  const mon=new Date(); const dow=(mon.getDay()+6)%7; mon.setDate(mon.getDate()-dow+cwWeekOffset*7); mon.setHours(0,0,0,0);
+  renderCWWeekGrid(mon);
+  const det=document.getElementById('cw-week-detail'); if(!det)return;
+  if(!cwSelectedDay){det.style.display='none';det.innerHTML='';return;}
+  det.style.display='';
+  renderCWDayDetail(de);
+}
+
+function renderCWDayDetail(de){
+  const det=document.getElementById('cw-week-detail'); if(!det)return;
+  if(!de.length){det.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:12px;">Sin entradas</div>';return;}
+  const byTipo={};
+  de.forEach(e=>{const t=(e.description||'').split('_')[0]||'Sin tipo';byTipo[t]=(byTipo[t]||0)+entryDur(e);});
+  const bar=Object.entries(byTipo).sort((a,b)=>b[1]-a[1]).map(([t,s])=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:9px;height:9px;border-radius:50%;background:${tipoColor(t)};flex-shrink:0;"></span><span style="font-weight:600;">${t}</span><span style="color:var(--text2);flex:1;text-align:right;">${fmtDur(s)}</span></div>`).join('');
+  const rows=de.sort((a,b)=>new Date(a.timeInterval.start)-new Date(b.timeInterval.start)).map(e=>{
+    const desc=e.description||'(sin descripción)',tipo=desc.split('_')[0],color=tipoColor(tipo);
+    const st=new Date(e.timeInterval.start).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.timeInterval.end).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const proj=cwProjects.find(p=>p.id===e.projectId);
+    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(desc)}</div><div class="cw-entry-sub">${st}–${en}${proj?' · '+escapeHtml(proj.name):''}</div></div><span class="cw-entry-dur">${fmtDur(entryDur(e))}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
+  }).join('');
+  det.innerHTML=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;"><div style="flex:1;min-width:160px;background:var(--surface2);border-radius:9px;padding:10px 14px;"><div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px;">Por tipo</div><div style="display:flex;flex-direction:column;gap:5px;">${bar}</div></div></div><div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>`;
+}
+
 </script>
+  <!-- ==================== FICHAJE ==================== -->
+  <div id="tab-fichaje" class="panel">
+    <!-- WIP Banner -->
+    <div style="display:flex;align-items:center;gap:10px;background:#fff8e1;border:1px solid #ffc107;border-radius:10px;padding:10px 16px;margin-bottom:16px;">
+      <i class="ti ti-tools" style="color:#f59e0b;font-size:18px;flex-shrink:0;"></i>
+      <div><strong style="font-size:13px;color:#92400e;">Módulo en construcción (WIP)</strong><span style="font-size:12px;color:#78350f;margin-left:8px;">Las funcionalidades de fichaje se irán completando. Los datos van directamente a Clockify.</span></div>
+    </div>
+
+    <!-- Estado de carga / error -->
+    <div id="fichaje-loading" style="text-align:center;padding:40px;color:var(--text2);font-size:14px;">
+      <i class="ti ti-loader-2" style="font-size:28px;display:block;margin-bottom:8px;animation:spin 1s linear infinite;"></i>Conectando con Clockify…
+    </div>
+    <div id="fichaje-no-config" style="display:none;text-align:center;padding:40px;">
+      <i class="ti ti-clock-off" style="font-size:44px;color:var(--text2);display:block;margin-bottom:12px;"></i>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Clockify no configurado</div>
+      <div style="font-size:13px;color:var(--text2);max-width:360px;margin:0 auto;">Tu usuario no tiene un ID de Clockify asignado o la API key no está configurada. Contacta con el administrador.</div>
+    </div>
+    <div id="fichaje-error" style="display:none;text-align:center;padding:40px;">
+      <i class="ti ti-wifi-off" style="font-size:44px;color:#ef5350;display:block;margin-bottom:12px;"></i>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Error al conectar con Clockify</div>
+      <div id="fichaje-error-msg" style="font-size:13px;color:var(--text2);"></div>
+      <button onclick="initClockify()" class="btn btn-ghost btn-sm" style="margin-top:12px;">Reintentar</button>
+    </div>
+
+    <!-- Contenido principal -->
+    <div id="fichaje-content" style="display:none;">
+      <!-- Timer activo (cuando hay uno corriendo) -->
+      <div id="cw-running-banner" style="display:none;align-items:center;gap:12px;background:linear-gradient(90deg,#e8f5e9,#f1f8e9);border:1.5px solid #a5d6a7;border-radius:12px;padding:12px 16px;margin-bottom:14px;">
+        <span style="width:11px;height:11px;border-radius:50%;background:#43a047;animation:cwpulse 1.4s infinite;flex-shrink:0;"></span>
+        <div style="flex:1;min-width:0;">
+          <div id="cw-running-label" style="font-size:13px;font-weight:600;color:#1b5e20;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+          <div id="cw-running-project" style="font-size:11px;color:#388e3c;margin-top:1px;"></div>
+        </div>
+        <div id="cw-running-time" style="font-size:26px;font-weight:700;color:#2e7d32;font-variant-numeric:tabular-nums;flex-shrink:0;"></div>
+        <button onclick="stopCWTimer(this)" style="padding:9px 18px;background:#ef5350;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:6px;transition:.15s;" onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#ef5350'">
+          <i class="ti ti-square-filled" style="font-size:13px;"></i> Parar
+        </button>
+      </div>
+
+      <div class="grid2" style="align-items:start;gap:12px;">
+        <!-- FORMULARIO NUEVA ENTRADA -->
+        <div class="card">
+          <div class="card-title"><i class="ti ti-clock-plus"></i> Nueva entrada</div>
+
+          <!-- Tipo de tarea -->
+          <div class="form-group">
+            <label class="form-label">Tipo de tarea <span style="color:#c62828;">*</span></label>
+            <select id="cw-tipo" class="form-select" onchange="updateCWPreview()">
+              <option value="">— Selecciona tipo —</option>
+            </select>
+            <div id="cw-tipo-desc" style="font-size:11px;color:var(--text2);margin-top:4px;min-height:14px;"></div>
+          </div>
+
+          <!-- Descripción -->
+          <div class="form-group">
+            <label class="form-label">Descripción <span style="font-size:11px;color:var(--text2);font-weight:400;">— qué has hecho exactamente</span></label>
+            <input type="text" id="cw-desc" class="form-input" placeholder="Ej: Modelado fachada norte bloque A" oninput="updateCWPreview()" maxlength="200"/>
+          </div>
+
+          <!-- Proyecto -->
+          <div class="form-group">
+            <label class="form-label">Proyecto <span style="font-size:11px;color:var(--text2);font-weight:400;">(opcional)</span></label>
+            <select id="cw-project" class="form-select">
+              <option value="">Sin proyecto asignado</option>
+            </select>
+          </div>
+
+          <!-- Preview nomenclatura -->
+          <div id="cw-preview-box" style="background:var(--surface2);border-radius:9px;padding:11px 14px;margin-bottom:12px;border:1.5px solid var(--border2);transition:.2s;">
+            <div style="font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px;">Vista previa · Clockify</div>
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <div id="cw-preview-tipo-dot" style="width:10px;height:10px;border-radius:50%;background:var(--border2);flex-shrink:0;margin-top:4px;"></div>
+              <div style="flex:1;min-width:0;">
+                <div id="cw-preview-desc" style="font-size:13px;font-weight:600;color:var(--text);font-family:monospace;word-break:break-all;">—</div>
+                <div id="cw-preview-project" style="font-size:11px;color:var(--text2);margin-top:2px;">Sin proyecto</div>
+              </div>
+              <div id="cw-valid-icon" style="font-size:18px;flex-shrink:0;"></div>
+            </div>
+            <div id="cw-valid-msg" style="font-size:11px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);display:none;"></div>
+          </div>
+
+          <!-- Botón iniciar cronómetro -->
+          <button id="cw-start-btn" onclick="startCWTimer(this)" class="btn btn-primary" style="width:100%;justify-content:center;gap:8px;font-size:14px;padding:12px;">
+            <i class="ti ti-player-play-filled"></i> Iniciar cronómetro
+          </button>
+
+          <!-- Entrada manual -->
+          <details style="margin-top:10px;">
+            <summary style="font-size:12px;color:var(--text2);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;"><i class="ti ti-edit" style="font-size:13px;"></i> Añadir entrada con hora fija</summary>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:180px;">
+                <input type="time" id="cw-manual-start" class="form-input" style="flex:1;" value="09:00"/>
+                <span style="color:var(--text2);flex-shrink:0;">→</span>
+                <input type="time" id="cw-manual-end" class="form-input" style="flex:1;" value="10:00"/>
+              </div>
+              <input type="date" id="cw-manual-date" class="form-input" style="flex:1;min-width:140px;"/>
+              <button onclick="addManualCWEntry(this)" class="btn btn-ghost btn-sm" style="flex-shrink:0;"><i class="ti ti-plus"></i> Añadir</button>
+            </div>
+          </details>
+        </div>
+
+        <!-- ENTRADAS DE HOY -->
+        <div class="card" style="min-height:200px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="cw-today-total" style="font-size:16px;font-weight:700;color:var(--primary);"></span>
+              <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
+            </div>
+          </div>
+          <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
+            <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA SEMANAL -->
+      <div class="card" style="margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin:0;"><i class="ti ti-calendar-week"></i> Vista semanal</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button onclick="cwWeekNav(-1)" class="btn btn-ghost btn-sm"><i class="ti ti-chevron-left"></i></button>
+            <span id="cw-week-label" style="font-size:13px;font-weight:600;color:var(--text);min-width:200px;text-align:center;"></span>
+            <button onclick="cwWeekNav(1)" class="btn btn-ghost btn-sm"><i class="ti ti-chevron-right"></i></button>
+            <button onclick="cwWeekNav(0,true)" class="btn btn-ghost btn-sm" style="font-size:11px;">Esta semana</button>
+          </div>
+          <span id="cw-week-total" style="font-size:14px;font-weight:700;color:var(--primary);"></span>
+        </div>
+        <!-- Días de la semana -->
+        <div id="cw-week-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:12px;"></div>
+        <!-- Detalle del día seleccionado -->
+        <div id="cw-week-detail" style="border-top:1px solid var(--border2);padding-top:12px;display:none;"></div>
+      </div>
+
+      <!-- GUÍA DE NOMENCLATURA -->
+      <details class="card" style="margin-top:12px;" onToggle="document.getElementById('cw-guide-chevron').style.transform=this.open?'rotate(180deg)':''">
+        <summary style="font-weight:600;font-size:14px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:2px 0;">
+          <i class="ti ti-book-2 grad-icon"></i> Guía de nomenclatura de fichaje
+          <i class="ti ti-chevron-down" id="cw-guide-chevron" style="margin-left:auto;color:var(--text2);font-size:14px;transition:.2s;"></i>
+        </summary>
+        <div style="margin-top:16px;">
+          <div style="background:var(--surface2);border-radius:10px;padding:14px 18px;margin-bottom:14px;border-left:3px solid #1565C0;">
+            <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Formato de la descripción en Clockify</div>
+            <div style="font-family:monospace;font-size:15px;">
+              <span style="font-weight:700;color:#1565C0;background:#e3f2fd;padding:2px 6px;border-radius:4px;">TipoTarea</span>
+              <span style="color:var(--text2);">_</span>
+              <span style="font-weight:600;color:#C2185B;background:#fce4ec;padding:2px 6px;border-radius:4px;">descripción libre</span>
+            </div>
+            <div style="font-size:12px;color:var(--text2);margin-top:8px;">Ejemplo: <code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;">Modeling_Fachada norte bloque A</code> → proyecto: <code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;">Edificio Riviera - Ayuntamiento Madrid</code></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:14px;">
+            <div style="background:var(--surface2);border-radius:9px;padding:12px 14px;">
+              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px;"><i class="ti ti-tag" style="margin-right:4px;"></i>TipoTarea</div>
+              <div style="font-size:12px;color:var(--text2);">Agrupa las horas para analizar en qué tipo de trabajo se invierte el tiempo. Solo puedes elegir entre los 13 tipos predefinidos.</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:9px;padding:12px 14px;">
+              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px;"><i class="ti ti-pencil" style="margin-right:4px;"></i>Descripción</div>
+              <div style="font-size:12px;color:var(--text2);">Texto libre. Explica qué has hecho exactamente. No se usa para agrupaciones pero ayuda a entender el trabajo realizado.</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:9px;padding:12px 14px;">
+              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px;"><i class="ti ti-briefcase" style="margin-right:4px;"></i>Proyecto</div>
+              <div style="font-size:12px;color:var(--text2);">Selecciona el proyecto en Clockify. Debe existir previamente (creado por el admin) con el formato <strong>Proyecto - Cliente</strong>.</div>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead>
+              <tr style="background:var(--surface2);">
+                <th style="text-align:left;padding:8px 12px;border-bottom:2px solid var(--border2);font-weight:700;">Tipo</th>
+                <th style="text-align:left;padding:8px 12px;border-bottom:2px solid var(--border2);font-weight:700;">Tareas incluidas</th>
+              </tr>
+            </thead>
+            <tbody id="cw-guide-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
+
 <div id="cal-tooltip"></div>
 <div id="app-toast" class="toast"></div>
 <div id="notif-panel">
