@@ -4800,7 +4800,8 @@ async function initClockify(){
   if(tbody) tbody.innerHTML=TIPOS_TAREA.map(t=>`<tr class="cw-guide-row"><td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:${t.color};display:inline-block;"></span><strong>${t.id}</strong></span></td><td style="color:var(--text2);">${t.desc}</td></tr>`).join('');
   const today=ldate();
   const md=document.getElementById('cw-manual-date'); if(md) md.value=today;
-  await Promise.all([loadCWProjects(),checkRunningCWTimer()]);
+  await loadCWProjects();
+  await checkRunningCWTimer();
   await loadCWToday(); cwWeekOffset=0; await loadCWWeek();
   if(supaProfile?.rol==='admin'){ document.getElementById('cw-admin-projects').style.display=''; await renderCWAdminProjects(); }
   document.getElementById('fichaje-loading').style.display='none';
@@ -4831,21 +4832,19 @@ function showRunningBanner(){
   const sw=document.getElementById('cw-start-wrap'); if(sw)sw.style.display='none';
   cwRefreshRunningLabel();
   startTimerDisplay();
-  // Rellenar los campos de edición en vivo
   const startDt=new Date(cwRunningEntry.hora_inicio);
-  const rd=document.getElementById('cw-running-date'); if(rd)rd.value=cwRunningEntry.fecha||ldate(startDt);
-  const startTime=startDt.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
-  const rs=document.getElementById('cw-running-start'); if(rs)rs.value=startTime;
-  const rt=document.getElementById('cw-running-tipo');
-  if(rt){
-    rt.innerHTML='<option value="">— Tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
-    rt.value=cwRunningEntry.tipo||'';
+  const elDate=document.getElementById('cw-running-date'); if(elDate)elDate.value=cwRunningEntry.fecha||ldate(startDt);
+  const elTime=document.getElementById('cw-running-start'); if(elTime)elTime.value=startDt.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+  const elTipo=document.getElementById('cw-running-tipo');
+  if(elTipo){
+    elTipo.innerHTML='<option value="">— Tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
+    elTipo.value=cwRunningEntry.tipo||'';
   }
-  const rd=document.getElementById('cw-running-desc'); if(rd)rd.value=cwRunningEntry.descripcion||'';
-  const rp=document.getElementById('cw-running-proj');
-  if(rp){
-    rp.innerHTML='<option value="">Sin proyecto</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
-    rp.value=cwRunningEntry.proyecto_id||'';
+  const elDesc=document.getElementById('cw-running-desc'); if(elDesc)elDesc.value=cwRunningEntry.descripcion||'';
+  const elProj=document.getElementById('cw-running-proj');
+  if(elProj){
+    elProj.innerHTML='<option value="">Sin proyecto</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
+    elProj.value=cwRunningEntry.proyecto_id||'';
   }
 }
 function cwRefreshRunningLabel(){
@@ -5473,10 +5472,11 @@ async function anlSendEmailReport(){
       </div>
 
       <!-- Botón iniciar (se oculta cuando hay timer activo) -->
-      <div id="cw-start-wrap" style="margin-bottom:14px;">
-        <button onclick="startCWTimer(this)" class="btn btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px;border-radius:12px;">
+      <div id="cw-start-wrap" style="margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button onclick="startCWTimer(this)" class="btn btn-primary" style="gap:8px;font-size:15px;padding:10px 28px;border-radius:10px;">
           <i class="ti ti-player-play-filled"></i> Iniciar cronómetro
         </button>
+        <span style="font-size:12px;color:var(--text2);">Rellena tipo y proyecto mientras corre el cronómetro</span>
       </div>
 
       <!-- ENTRADAS DE HOY -->
