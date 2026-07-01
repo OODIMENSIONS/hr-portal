@@ -4776,7 +4776,7 @@ const tipoColor=id=>(TIPOS_TAREA.find(t=>t.id===id)||{color:'#90A4AE'}).color;
 const tipoDesc =id=>(TIPOS_TAREA.find(t=>t.id===id)||{desc:''}).desc;
 const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${h}h ${String(m).padStart(2,'0')}m`:`${m}m ${String(sec).padStart(2,'0')}s`;};
 const entryDur=e=>{const s=new Date(e.hora_inicio),en=e.hora_fin?new Date(e.hora_fin):new Date();return Math.floor((en-s)/1000);};
-const entryProjName=e=>e.proyectos?.nombre||'';
+const entryProjName=e=>{ const p=cwProjects.find(x=>x.id===e.proyecto_id); return p?p.nombre+(p.cliente?' — '+p.cliente:''):''; };
 
 async function initClockify(){
   ['fichaje-loading','fichaje-content','fichaje-no-config','fichaje-error'].forEach(id=>{
@@ -4796,13 +4796,13 @@ async function initClockify(){
   const md=document.getElementById('cw-manual-date'); if(md) md.value=today;
   await Promise.all([loadCWProjects(),checkRunningCWTimer()]);
   await loadCWToday(); cwWeekOffset=0; await loadCWWeek();
-  if(supaProfile.rol==='admin') renderCWAdminProjects();
+  // proyectos gestionados desde tab Capacidad (cap_proyectos)
   document.getElementById('fichaje-loading').style.display='none';
   document.getElementById('fichaje-content').style.display='';
 }
 
 async function loadCWProjects(){
-  const {data,error}=await supa.from('proyectos').select('*').eq('activo',true).order('nombre');
+  const {data,error}=await supa.from('cap_proyectos').select('id,nombre,cliente,color').order('orden').order('nombre');
   if(error){console.error('CW proyectos',error);return;}
   cwProjects=data||[];
   const sel=document.getElementById('cw-project');
@@ -4811,7 +4811,7 @@ async function loadCWProjects(){
 
 async function checkRunningCWTimer(){
   if(!supaUser?.id)return;
-  const {data}=await supa.from('time_entries').select('*, proyectos(nombre,color)').eq('usuario_id',supaUser.id).is('hora_fin',null).maybeSingle();
+  const {data}=await supa.from('time_entries').select('*').eq('usuario_id',supaUser.id).is('hora_fin',null).maybeSingle();
   if(data){cwRunningEntry=data;showRunningBanner();}
   else{cwRunningEntry=null;hideRunningBanner();}
 }
@@ -4851,8 +4851,7 @@ function updateCWPreview(){
   document.getElementById('cw-preview-desc').textContent=tipo?(desc?`${tipo}_${desc}`:`${tipo}_`):(desc||'—');
   document.getElementById('cw-preview-project').textContent=proj?proj.nombre:'Sin proyecto';
   const vi=document.getElementById('cw-valid-icon'), vm=document.getElementById('cw-valid-msg');
-  if(tipo&&desc){vi.textContent='✅';vm.style.display='none';}
-  else if(tipo&&!desc){vi.textContent='⚠️';vm.style.display='';vm.style.color='#e65100';vm.textContent='Falta la descripción (TipoTarea_descripción)';}
+  if(tipo){vi.textContent='✅';vm.style.display='none';}
   else if(!tipo&&desc){vi.textContent='⚠️';vm.style.display='';vm.style.color='#e65100';vm.textContent='Selecciona el tipo de tarea';}
   else{vi.textContent='';vm.style.display='none';}
 }
@@ -4860,14 +4859,13 @@ function updateCWPreview(){
 async function startCWTimer(btn){
   const tipo=document.getElementById('cw-tipo').value, desc=document.getElementById('cw-desc').value.trim();
   if(!tipo){alert('Selecciona el tipo de tarea.');return;}
-  if(!desc){alert('Añade una descripción.');return;}
   const projId=document.getElementById('cw-project').value||null;
   const today=new Date().toISOString().split('T')[0];
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Iniciando…';
   const {data,error}=await supa.from('time_entries').insert({
     usuario_id:supaUser.id, tipo, descripcion:desc,
     proyecto_id:projId, fecha:today, hora_inicio:new Date().toISOString()
-  }).select('*, proyectos(nombre,color)').single();
+  }).select('*').single();
   btn.disabled=false; btn.innerHTML='<i class="ti ti-player-play-filled"></i> Iniciar cronómetro';
   if(error){console.error(error);alert('Error al iniciar el cronómetro.');return;}
   cwRunningEntry=data; showRunningBanner(); showToast('Cronómetro iniciado ✓');
@@ -4889,7 +4887,6 @@ async function addManualCWEntry(btn){
   const startT=document.getElementById('cw-manual-start').value, endT=document.getElementById('cw-manual-end').value;
   const dateV=document.getElementById('cw-manual-date').value;
   if(!tipo){alert('Selecciona el tipo de tarea.');return;}
-  if(!desc){alert('Añade una descripción.');return;}
   if(!startT||!endT||!dateV){alert('Indica fecha y hora.');return;}
   if(startT>=endT){alert('La hora de fin debe ser posterior a la de inicio.');return;}
   const projId=document.getElementById('cw-project').value||null;
@@ -4907,7 +4904,7 @@ async function addManualCWEntry(btn){
 async function loadCWToday(){
   if(!supaUser?.id)return;
   const today=new Date().toISOString().split('T')[0];
-  const {data,error}=await supa.from('time_entries').select('*, proyectos(nombre,color)').eq('usuario_id',supaUser.id).eq('fecha',today).not('hora_fin','is',null).order('hora_inicio',{ascending:false});
+  const {data,error}=await supa.from('time_entries').select('*').eq('usuario_id',supaUser.id).eq('fecha',today).not('hora_fin','is',null).order('hora_inicio',{ascending:false});
   const list=document.getElementById('cw-today-list'), totEl=document.getElementById('cw-today-total');
   if(error){if(list)list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:16px;">Error al cargar</div>';return;}
   const entries=data||[];
@@ -4944,7 +4941,7 @@ async function loadCWWeek(){
   const fmt=d=>d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
   const wl=document.getElementById('cw-week-label'); if(wl)wl.textContent=`${fmt(mon)} – ${fmt(sun)}`;
   const monStr=mon.toISOString().split('T')[0], sunStr=sun.toISOString().split('T')[0];
-  const {data,error}=await supa.from('time_entries').select('*, proyectos(nombre,color)').eq('usuario_id',supaUser.id).gte('fecha',monStr).lte('fecha',sunStr).not('hora_fin','is',null);
+  const {data,error}=await supa.from('time_entries').select('*').eq('usuario_id',supaUser.id).gte('fecha',monStr).lte('fecha',sunStr).not('hora_fin','is',null);
   cwWeekEntries=error?[]:(data||[]);
   const tot=cwWeekEntries.reduce((a,e)=>a+entryDur(e),0);
   const wt=document.getElementById('cw-week-total'); if(wt)wt.textContent=tot>0?`Total: ${fmtDur(tot)}`:'';
