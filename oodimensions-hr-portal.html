@@ -4814,6 +4814,22 @@ const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;r
 const fmtDurH=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return m?`${h}h ${m}m`:`${h}h`;};
 const entryDur=e=>{const s=new Date(e.hora_inicio),en=e.hora_fin?new Date(e.hora_fin):new Date();return Math.floor((en-s)/1000);};
 const entryProjName=e=>{ const p=cwProjects.find(x=>x.id===e.proyecto_id); return p?p.nombre+(p.cliente?' — '+p.cliente:''):''; };
+
+async function cwCheckOverlap(fecha,startISO,endISO,excludeId=null){
+  const {data}=await supa.from('time_entries').select('id,hora_inicio,hora_fin,tipo,descripcion')
+    .eq('usuario_id',supaUser.id).eq('fecha',fecha).not('hora_fin','is',null);
+  const ns=new Date(startISO),ne=new Date(endISO);
+  return (data||[]).filter(e=>e.id!==excludeId&&new Date(e.hora_inicio)<ne&&new Date(e.hora_fin)>ns);
+}
+function cwOverlapWarn(conflicts){
+  const lines=conflicts.map(e=>{
+    const s=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const lbl=e.tipo&&e.descripcion?`${e.tipo}_${e.descripcion}`:e.tipo||e.descripcion||'Sin datos';
+    return `• ${lbl} (${s}–${en})`;
+  }).join('\n');
+  return confirm(`⚠️ Esta entrada se solapa con:\n\n${lines}\n\n¿Continuar de todas formas?`);
+}
 // Objetivo de horas por día según horario OO Dimensions
 // L-J: 9-14 + 15-18:30 = 8,5h | V: 9-15 = 6h | Julio-Agosto: 7h/día L-V
 function cwDayTarget(dateStr){
@@ -4975,6 +4991,9 @@ async function stopCWTimer(btn){
   if(!cwRunningEntry)return;
   if(!cwRunningEntry.tipo){showToast('Indica el tipo de tarea antes de parar ⚠️');return;}
   if(!cwRunningEntry.proyecto_id){showToast('Selecciona el proyecto antes de parar ⚠️');return;}
+  const nowISO=new Date().toISOString();
+  const _sc=await cwCheckOverlap(cwRunningEntry.fecha,cwRunningEntry.hora_inicio,nowISO,cwRunningEntry.id);
+  if(_sc.length&&!cwOverlapWarn(_sc))return;
   btn.disabled=true; btn.textContent='Parando…';
   const {error}=await supa.from('time_entries').update({hora_fin:new Date().toISOString()}).eq('id',cwRunningEntry.id);
   btn.disabled=false;
@@ -4991,6 +5010,9 @@ async function addManualCWEntry(btn){
   if(!tipo){alert('Selecciona el tipo de tarea.');return;}
   if(!startT||!endT||!dateV){alert('Indica fecha y hora.');return;}
   if(startT>=endT){alert('La hora de fin debe ser posterior a la de inicio.');return;}
+  const _si=new Date(`${dateV}T${startT}:00`).toISOString(),_ei=new Date(`${dateV}T${endT}:00`).toISOString();
+  const _mc=await cwCheckOverlap(dateV,_si,_ei);
+  if(_mc.length&&!cwOverlapWarn(_mc))return;
   const projId=document.getElementById('cw-project').value||null;
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>';
   const {error}=await supa.from('time_entries').insert({
@@ -5075,6 +5097,11 @@ async function cwSaveEntryEdit(id,eid,fecha,btn){
   const desc=box.querySelector('[data-field="desc"]').value.trim()||null;
   const proj=box.querySelector('[data-field="proj"]').value||null;
   if(stV&&enV&&stV>=enV){alert('La hora de fin debe ser posterior al inicio.');return;}
+  if(stV&&enV){
+    const _si2=new Date(`${fecha}T${stV}:00`).toISOString(),_ei2=new Date(`${fecha}T${enV}:00`).toISOString();
+    const _ec=await cwCheckOverlap(fecha,_si2,_ei2,id);
+    if(_ec.length&&!cwOverlapWarn(_ec))return;
+  }
   btn.disabled=true;
   const updates={tipo,descripcion:desc,proyecto_id:proj};
   if(stV) updates.hora_inicio=new Date(`${fecha}T${stV}:00`).toISOString();
