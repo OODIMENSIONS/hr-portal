@@ -4827,6 +4827,7 @@ function showRunningBanner(){
   if(!cwRunningEntry)return;
   const banner=document.getElementById('cw-running-banner'); if(!banner)return;
   banner.style.display='flex';
+  const sw=document.getElementById('cw-start-wrap'); if(sw)sw.style.display='none';
   cwRefreshRunningLabel();
   startTimerDisplay();
   // Rellenar los campos de edición en vivo
@@ -4878,6 +4879,7 @@ async function cwLiveUpdateStart(){
 }
 function hideRunningBanner(){
   const b=document.getElementById('cw-running-banner'); if(b)b.style.display='none';
+  const sw=document.getElementById('cw-start-wrap'); if(sw)sw.style.display='';
   if(cwTimerInterval){clearInterval(cwTimerInterval);cwTimerInterval=null;}
 }
 function startTimerDisplay(){
@@ -5463,82 +5465,53 @@ async function anlSendEmailReport(){
         </div>
       </div>
 
-      <div class="grid2" style="align-items:start;gap:12px;">
-        <!-- FORMULARIO NUEVA ENTRADA -->
-        <div class="card">
-          <div class="card-title"><i class="ti ti-clock-plus"></i> Nueva entrada</div>
+      <!-- Botón iniciar (se oculta cuando hay timer activo) -->
+      <div id="cw-start-wrap" style="margin-bottom:14px;">
+        <button onclick="startCWTimer(this)" class="btn btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px;border-radius:12px;">
+          <i class="ti ti-player-play-filled"></i> Iniciar cronómetro
+        </button>
+      </div>
 
-          <!-- Tipo de tarea -->
-          <div class="form-group">
-            <label class="form-label">Tipo de tarea <span style="color:#c62828;">*</span></label>
-            <select id="cw-tipo" class="form-select" onchange="updateCWPreview()">
-              <option value="">— Selecciona tipo —</option>
-            </select>
-            <div id="cw-tipo-desc" style="font-size:11px;color:var(--text2);margin-top:4px;min-height:14px;"></div>
+      <!-- ENTRADAS DE HOY -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="cw-today-total" style="font-size:16px;font-weight:700;color:var(--primary);"></span>
+            <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
           </div>
-
-          <!-- Descripción -->
-          <div class="form-group">
-            <label class="form-label">Descripción <span style="font-size:11px;color:var(--text2);font-weight:400;">— qué has hecho exactamente</span></label>
-            <input type="text" id="cw-desc" class="form-input" placeholder="Ej: Modelado fachada norte bloque A" oninput="updateCWPreview()" maxlength="200"/>
-          </div>
-
-          <!-- Proyecto -->
-          <div class="form-group">
-            <label class="form-label">Proyecto <span style="font-size:11px;color:var(--text2);font-weight:400;">(opcional)</span></label>
-            <select id="cw-project" class="form-select">
-              <option value="">Sin proyecto asignado</option>
-            </select>
-          </div>
-
-          <!-- Preview nomenclatura -->
-          <div id="cw-preview-box" style="background:var(--surface2);border-radius:9px;padding:11px 14px;margin-bottom:12px;border:1.5px solid var(--border2);transition:.2s;">
-            <div style="font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px;">Vista previa · nomenclatura</div>
-            <div style="display:flex;align-items:flex-start;gap:8px;">
-              <div id="cw-preview-tipo-dot" style="width:10px;height:10px;border-radius:50%;background:var(--border2);flex-shrink:0;margin-top:4px;"></div>
-              <div style="flex:1;min-width:0;">
-                <div id="cw-preview-desc" style="font-size:13px;font-weight:600;color:var(--text);font-family:monospace;word-break:break-all;">—</div>
-                <div id="cw-preview-project" style="font-size:11px;color:var(--text2);margin-top:2px;">Sin proyecto</div>
-              </div>
-              <div id="cw-valid-icon" style="font-size:18px;flex-shrink:0;"></div>
-            </div>
-            <div id="cw-valid-msg" style="font-size:11px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);display:none;"></div>
-          </div>
-
-          <!-- Botón iniciar cronómetro -->
-          <button id="cw-start-btn" onclick="startCWTimer(this)" class="btn btn-primary" style="width:100%;justify-content:center;gap:8px;font-size:14px;padding:12px;">
-            <i class="ti ti-player-play-filled"></i> Iniciar cronómetro
-          </button>
-
-          <!-- Entrada manual -->
-          <details style="margin-top:10px;">
-            <summary style="font-size:12px;color:var(--text2);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;"><i class="ti ti-edit" style="font-size:13px;"></i> Añadir entrada con hora fija</summary>
-            <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:180px;">
-                <input type="time" id="cw-manual-start" class="form-input" style="flex:1;" value="09:00"/>
-                <span style="color:var(--text2);flex-shrink:0;">→</span>
-                <input type="time" id="cw-manual-end" class="form-input" style="flex:1;" value="10:00"/>
-              </div>
-              <input type="date" id="cw-manual-date" class="form-input" style="flex:1;min-width:140px;"/>
-              <button onclick="addManualCWEntry(this)" class="btn btn-ghost btn-sm" style="flex-shrink:0;"><i class="ti ti-plus"></i> Añadir</button>
-            </div>
-          </details>
         </div>
-
-        <!-- ENTRADAS DE HOY -->
-        <div class="card" style="min-height:200px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span id="cw-today-total" style="font-size:16px;font-weight:700;color:var(--primary);"></span>
-              <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
-            </div>
-          </div>
-          <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
-            <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
-          </div>
+        <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
+          <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
         </div>
       </div>
+
+      <!-- Entrada manual (hora fija) -->
+      <details class="card" style="margin-bottom:12px;">
+        <summary style="font-size:13px;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:2px 0;">
+          <i class="ti ti-clock-edit grad-icon"></i> Añadir entrada con hora fija
+        </summary>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select id="cw-tipo" class="form-select" style="flex:1;min-width:130px;">
+              <option value="">— Tipo de tarea —</option>
+            </select>
+            <input type="text" id="cw-desc" class="form-input" placeholder="Descripción (opcional)" maxlength="200" style="flex:2;min-width:180px;"/>
+            <select id="cw-project" class="form-select" style="flex:1;min-width:150px;">
+              <option value="">Sin proyecto</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:180px;">
+              <input type="time" id="cw-manual-start" class="form-input" style="flex:1;" value="09:00"/>
+              <span style="color:var(--text2);flex-shrink:0;">→</span>
+              <input type="time" id="cw-manual-end" class="form-input" style="flex:1;" value="10:00"/>
+            </div>
+            <input type="date" id="cw-manual-date" class="form-input" style="flex:1;min-width:140px;"/>
+            <button onclick="addManualCWEntry(this)" class="btn btn-primary btn-sm" style="flex-shrink:0;"><i class="ti ti-plus"></i> Añadir</button>
+          </div>
+        </div>
+      </details>
 
       <!-- VISTA SEMANAL -->
       <div class="card" style="margin-top:12px;">
