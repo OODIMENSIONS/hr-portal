@@ -4811,8 +4811,23 @@ let cwWeekOffset=0, cwSelectedDay=null, cwWeekEntries=[];
 const tipoColor=id=>(TIPOS_TAREA.find(t=>t.id===id)||{color:'#90A4AE'}).color;
 const tipoDesc =id=>(TIPOS_TAREA.find(t=>t.id===id)||{desc:''}).desc;
 const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${h}h ${String(m).padStart(2,'0')}m`:`${m}m ${String(sec).padStart(2,'0')}s`;};
+const fmtDurH=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return m?`${h}h ${m}m`:`${h}h`;};
 const entryDur=e=>{const s=new Date(e.hora_inicio),en=e.hora_fin?new Date(e.hora_fin):new Date();return Math.floor((en-s)/1000);};
 const entryProjName=e=>{ const p=cwProjects.find(x=>x.id===e.proyecto_id); return p?p.nombre+(p.cliente?' — '+p.cliente:''):''; };
+// Objetivo de horas por día según horario OO Dimensions
+// L-J: 9-14 + 15-18:30 = 8,5h | V: 9-15 = 6h | Julio-Agosto: 7h/día L-V
+function cwDayTarget(dateStr){
+  const d=new Date(dateStr+'T12:00:00'), dow=d.getDay(), mo=d.getMonth()+1;
+  if(dow===0||dow===6) return 0; // fin de semana
+  if(mo===7||mo===8) return 7*3600; // verano
+  if(dow===5) return 6*3600; // viernes
+  return 8.5*3600; // lunes-jueves
+}
+function cwWeekTarget(monday){
+  let t=0;
+  for(let i=0;i<5;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);t+=cwDayTarget(ldate(d));}
+  return t;
+}
 
 async function initClockify(){
   ['fichaje-loading','fichaje-content','fichaje-no-config','fichaje-error'].forEach(id=>{
@@ -5093,7 +5108,14 @@ async function loadCWWeek(){
   const {data,error}=await supa.from('time_entries').select('*').eq('usuario_id',supaUser.id).gte('fecha',monStr).lte('fecha',sunStr).not('hora_fin','is',null);
   cwWeekEntries=error?[]:(data||[]);
   const tot=cwWeekEntries.reduce((a,e)=>a+entryDur(e),0);
-  const wt=document.getElementById('cw-week-total'); if(wt)wt.textContent=tot>0?`Total: ${fmtDur(tot)}`:'';
+  const weekTgt=cwWeekTarget(mon);
+  const wt=document.getElementById('cw-week-total');
+  if(wt){
+    if(tot>0){
+      const done=tot>=weekTgt;
+      wt.innerHTML=`<span style="color:${done?'#43a047':'var(--primary)'};">${fmtDur(tot)}</span><span style="font-size:11px;font-weight:400;color:var(--text2);margin-left:4px;">/ ${fmtDurH(weekTgt)}</span>`;
+    } else { wt.innerHTML=''; }
+  }
   renderCWWeekGrid(mon);
 }
 
@@ -5108,11 +5130,15 @@ function renderCWWeekGrid(monday){
     const de=cwWeekEntries.filter(e=>e.fecha===dStr);
     const sec=de.reduce((a,e)=>a+entryDur(e),0);
     const isT=d.getTime()===today.getTime(), isSel=cwSelectedDay===dStr;
-    const pct=Math.min(100,(sec/28800)*100);
+    const target=cwDayTarget(dStr);
+    const pct=target>0?Math.min(100,(sec/target)*100):0;
+    const done=target>0&&sec>=target;
+    const barColor=done?'#43a047':pct>=75?'#fb8c00':'var(--primary)';
+    const hoursLabel=sec>0?fmtDur(sec)+(done?' ✓':''):'—';
     const col=document.createElement('div');
     col.className='cw-day-col'+(isT?' cw-today':'')+(isSel?' cw-selected':'');
     col.onclick=()=>selectCWDay(dStr,de);
-    col.innerHTML=`<div class="cw-day-name">${DN[i]}</div><div class="cw-day-num">${d.getDate()}</div><div class="cw-day-hours">${sec>0?fmtDur(sec):'—'}</div><div class="cw-day-bar"><div class="cw-day-bar-fill" style="width:${pct}%;"></div></div>`;
+    col.innerHTML=`<div class="cw-day-name">${DN[i]}</div><div class="cw-day-num">${d.getDate()}</div><div class="cw-day-hours" style="${done?'color:#43a047':''}">${hoursLabel}</div><div class="cw-day-bar">${target>0?`<div class="cw-day-bar-fill" style="width:${pct}%;background:${barColor};"></div>`:''}</div>`;
     grid.appendChild(col);
   }
   const detEl=document.getElementById('cw-week-detail');
@@ -5176,12 +5202,26 @@ function renderCWDayDetail(de){
       </div>
     </div>`;
   }).join('');
-  det.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-    <div style="background:var(--surface2);border-radius:9px;padding:8px 14px;flex:1;min-width:160px;">
+  const target=cwSelectedDay?cwDayTarget(cwSelectedDay):0;
+  const pct=target>0?Math.min(100,(tot/target)*100):0;
+  const done=target>0&&tot>=target;
+  const barColor=done?'#43a047':pct>=75?'#fb8c00':'#1565C0';
+  const progressHtml=target>0?`
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:5px;">
+        <span style="font-weight:700;font-size:14px;color:${barColor};">${fmtDur(tot)}</span>
+        <span style="color:var(--text2);">objetivo <strong>${fmtDurH(target)}</strong></span>
+      </div>
+      <div style="background:var(--border2);border-radius:4px;height:7px;overflow:hidden;">
+        <div style="width:${pct}%;background:${barColor};border-radius:4px;height:100%;transition:.4s;"></div>
+      </div>
+      ${done?`<div style="font-size:11px;color:#43a047;font-weight:600;margin-top:4px;">✓ Objetivo completado</div>`:(target-tot>0?`<div style="font-size:11px;color:var(--text2);margin-top:4px;">Faltan ${fmtDurH(target-tot)}</div>`:'')}
+    </div>`:'';
+  det.innerHTML=`${progressHtml}<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px;">
+    <div style="background:var(--surface2);border-radius:9px;padding:8px 14px;flex:1;min-width:0;">
       <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px;">Por tipo</div>
       <div style="display:flex;flex-direction:column;gap:5px;">${bar}</div>
     </div>
-    <span style="font-size:16px;font-weight:700;color:var(--primary);padding:0 4px;">${fmtDur(tot)}</span>
   </div>
   <div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>`;
   de.forEach(e=>{
