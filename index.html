@@ -406,7 +406,7 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
               stroke="url(#lg2)" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div>
-        <div style="font-size:18px;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Infinity Dimensions</div>
+        <div style="font-size:18px;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">OO Dimensions</div>
         <div style="font-size:12px;color:var(--text2);">Portal de gestión de equipo</div>
       </div>
     </div>
@@ -447,7 +447,7 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
               stroke="url(#lg)" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div>
-        <div class="logo-text">Infinity Dimensions</div>
+        <div class="logo-text">OO Dimensions</div>
         <div class="logo-sub">Portal de gestión de equipo</div>
       </div>
     </div>
@@ -970,11 +970,11 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:1.5rem;">
       <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:var(--r);padding:14px 16px;display:flex;gap:12px;align-items:flex-start;">
         <i class="ti ti-bulb grad-icon" style="font-size:22px;flex-shrink:0;margin-top:1px;"></i>
-        <p style="font-size:13px;color:#1e3a5f;margin:0;">En este espacio se puede entender la política de <strong>Vacaciones y Ausencias</strong> de Infinity Dimensions S.L.</p>
+        <p style="font-size:13px;color:#1e3a5f;margin:0;">En este espacio se puede entender la política de <strong>Vacaciones y Ausencias</strong> de OO Dimensions S.L.</p>
       </div>
       <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:var(--r);padding:14px 16px;display:flex;gap:12px;align-items:flex-start;">
         <i class="ti ti-alert-triangle grad-icon" style="font-size:22px;flex-shrink:0;margin-top:1px;"></i>
-        <p style="font-size:13px;color:#7c2d12;margin:0;">Si el empleado/a decide unilateralmente y sin consentimiento no seguir alguna de estas normas, tendrá <strong>consecuencias graves e irreversibles</strong> para su relación profesional con Infinity Dimensions.</p>
+        <p style="font-size:13px;color:#7c2d12;margin:0;">Si el empleado/a decide unilateralmente y sin consentimiento no seguir alguna de estas normas, tendrá <strong>consecuencias graves e irreversibles</strong> para su relación profesional con OO Dimensions.</p>
       </div>
     </div>
 
@@ -997,7 +997,7 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
             <li>Obligatorio consumir al menos el <strong>50% de las vacaciones antes de Septiembre</strong>.</li>
             <li>Más de 3 días: avisa con <strong>al menos 1 mes</strong>. Menos de 3 días: avisa con <strong>1–2 semanas</strong>.</li>
             <li>Se aconseja <strong>no pagar vuelos/alojamientos</strong> sin haber tenido las vacaciones aprobadas previamente.</li>
-            <li>Usad el <strong>Notion de solicitud de Vacaciones</strong> para marcar los días.</li>
+            <li>Usad <strong>este portal</strong> para solicitar y gestionar los días de vacaciones.</li>
             <li>Cada uno disfrutará de los festivos <strong>nacionales comunes</strong> para todos y los <strong>locales de su localización</strong>.</li>
           </ul>
         </div>
@@ -3198,7 +3198,12 @@ function buildTable() {
       ['A','MA','AP','MD','AT'].includes(s.tipo) &&
       new Date(s.fecha_inicio).getFullYear() === tableStartYear
     );
-    const total    = parseFloat(u.dias_vac_2026 || 23);
+    const base2026u = parseFloat(u.dias_vac_2026 || 23);
+    const arrBrutos = Math.min(5, parseFloat(u.dias_vac_2025 || 0));
+    const cutoff = new Date('2026-04-01');
+    const usadosPreCutoff = sol2026.filter(s=>s.estado==='aprobado'&&['A','MA','AP','MD'].includes(s.tipo)&&new Date(s.fecha_inicio+'T12:00:00')<cutoff).reduce((a,s)=>a+(parseFloat(s.dias)||0),0);
+    const arrEfectivos = today < cutoff ? arrBrutos : Math.min(arrBrutos, usadosPreCutoff);
+    const total    = base2026u + arrEfectivos;
     const asig     = sol2026.filter(s=>s.estado==='aprobado'&&['A','MA','AP','MD'].includes(s.tipo)).reduce((a,s)=>a+(parseFloat(s.dias)||0),0);
     const disfr    = sol2026.filter(s=>s.estado==='aprobado'&&['A','MA','AP','MD'].includes(s.tipo)&&new Date(s.fecha_fin+'T23:59:59')<today).reduce((a,s)=>a+(parseFloat(s.dias)||0),0);
     const pend     = Math.max(0, total - asig);
