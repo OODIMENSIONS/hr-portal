@@ -5472,10 +5472,10 @@ async function anlSendEmailReport(){
       </div>
 
       <!-- COLUMNAS: izq = acciones, der = hoy -->
-      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:14px;margin-bottom:14px;align-items:start;">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:14px;margin-bottom:14px;align-items:start;">
 
         <!-- Columna izquierda: Iniciar + Entrada manual -->
-        <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0;">
 
           <!-- Botón iniciar -->
           <div id="cw-start-wrap" class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 16px;">
@@ -5489,19 +5489,19 @@ async function anlSendEmailReport(){
           <div class="card" style="padding:14px 16px;">
             <div class="card-title" style="margin-bottom:12px;font-size:13px;"><i class="ti ti-clock-edit grad-icon"></i> Añadir con hora fija</div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <select id="cw-tipo" class="form-select">
+              <select id="cw-tipo" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);">
                 <option value="">— Tipo de tarea —</option>
               </select>
-              <select id="cw-project" class="form-select">
+              <select id="cw-project" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);">
                 <option value="">Sin proyecto</option>
               </select>
-              <input type="text" id="cw-desc" class="form-input" placeholder="Descripción (opcional)" maxlength="200"/>
+              <input type="text" id="cw-desc" placeholder="Descripción (opcional)" maxlength="200" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"/>
               <div style="display:flex;align-items:center;gap:6px;">
-                <input type="time" id="cw-manual-start" class="form-input" style="flex:1;" value="09:00"/>
+                <input type="time" id="cw-manual-start" value="09:00" style="flex:1;min-width:0;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 6px;font-size:13px;background:var(--surface);color:var(--text);"/>
                 <span style="color:var(--text2);flex-shrink:0;">→</span>
-                <input type="time" id="cw-manual-end" class="form-input" style="flex:1;" value="10:00"/>
+                <input type="time" id="cw-manual-end" value="10:00" style="flex:1;min-width:0;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 6px;font-size:13px;background:var(--surface);color:var(--text);"/>
               </div>
-              <input type="date" id="cw-manual-date" class="form-input"/>
+              <input type="date" id="cw-manual-date" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"/>
               <button onclick="addManualCWEntry(this)" class="btn btn-primary btn-sm" style="align-self:flex-end;"><i class="ti ti-plus"></i> Añadir entrada</button>
             </div>
           </div>
@@ -5509,7 +5509,7 @@ async function anlSendEmailReport(){
         </div>
 
         <!-- Columna derecha: Hoy -->
-        <div class="card" style="min-height:200px;">
+        <div class="card" style="min-height:200px;min-width:0;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -5603,7 +5603,7 @@ async function anlSendEmailReport(){
   </div>
 
   <!-- ==================== ANÁLISIS ==================== -->
-  <div id="tab-analisis" class="panel" style="display:none;">
+  <div id="tab-analisis" class="panel">
 
     <!-- Panel admin: proyectos (compartido con Capacidad y Fichaje) -->
     <div id="anl-admin-projects" class="card admin-only" style="display:none;margin-bottom:14px;">
