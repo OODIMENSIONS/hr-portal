@@ -2082,7 +2082,8 @@ function updateDoc() {
 }
 
 function downloadDoc() {
-  const loc = document.getElementById('t-loc').value || '—';
+  const loc = escapeHtml(document.getElementById('t-loc').value || '—');
+  const addr = escapeHtml(document.getElementById('t-addr').value || '—');
   const sd = document.getElementById('t-start').value;
   const ed = document.getElementById('t-end').value;
   const sigHtml = profile.sigDataUrl
@@ -2095,10 +2096,10 @@ function downloadDoc() {
   .sig-area{border-bottom:1px solid #ccc;height:50px;display:flex;align-items:flex-end;padding-bottom:4px;}
   .sig-label{font-size:10px;color:#888;margin-bottom:4px;}</style></head><body>
   <h2>SOLICITUD DE TELETRABAJO DESDE UBICACIÓN ALTERNATIVA</h2>
-  <p>D./Dña. <strong>${profile.nombre||'—'}</strong>, con DNI <strong>${profile.dni||'—'}</strong>, perteneciente al departamento de <strong>${profile.dpto||'—'}</strong>, solicita autorización para desempeñar sus funciones en modalidad de teletrabajo desde una ubicación alternativa a la habitual.</p>
+  <p>D./Dña. <strong>${escapeHtml(profile.nombre||'—')}</strong>, con DNI <strong>${escapeHtml(profile.dni||'—')}</strong>, perteneciente al departamento de <strong>${escapeHtml(profile.dpto||'—')}</strong>, solicita autorización para desempeñar sus funciones en modalidad de teletrabajo desde una ubicación alternativa a la habitual.</p>
   <br/><p><strong>Período:</strong> del <strong>${sd?new Date(sd+'T12:00:00').toLocaleDateString('es-ES'):'—'}</strong> al <strong>${ed?new Date(ed+'T12:00:00').toLocaleDateString('es-ES'):'—'}</strong></p>
   <p><strong>Ubicación:</strong> <strong>${loc}</strong></p>
-  <p><strong>Dirección:</strong> <strong>${document.getElementById('t-addr').value||'—'}</strong></p>
+  <p><strong>Dirección:</strong> <strong>${addr}</strong></p>
   <br/><p>El/la solicitante se compromete a mantener los mismos niveles de disponibilidad, rendimiento y seguridad de la información que en el puesto habitual.</p>
   <div class="sig-grid">
     <div><p class="sig-label">Firma del empleado/a</p><div class="sig-area">${sigHtml}</div><p style="font-size:10px;color:#888;margin-top:4px;">Fecha: ${new Date().toLocaleDateString('es-ES')}</p></div>
@@ -4501,18 +4502,18 @@ function downloadSignedTeleDoc(id) {
   const locMatch = (s.nota||'').match(/Ubicación:\s*([^|]+)/);
   const addrMatch = (s.nota||'').match(/Dirección:\s*([^|]+)/);
   const justMatch = (s.nota||'').match(/Justificación:\s*([^|]+)/);
-  const loc  = locMatch ? locMatch[1].trim() : '—';
-  const addr = addrMatch ? addrMatch[1].trim() : '—';
-  const just = justMatch ? justMatch[1].trim() : '';
+  const loc  = escapeHtml(locMatch ? locMatch[1].trim() : '—');
+  const addr = escapeHtml(addrMatch ? addrMatch[1].trim() : '—');
+  const just = escapeHtml(justMatch ? justMatch[1].trim() : '');
   const fmt = iso => iso ? new Date(iso+'T12:00:00').toLocaleDateString('es-ES') : '—';
-  const empSigHtml = emp?.firma ? `<img src="${emp.firma}" style="height:40px;max-width:100%;"/>` : `<span style="font-family:Georgia,serif;font-size:18px;">${(emp?.nombre||'').split(' ').slice(0,2).join(' ')}</span>`;
-  const admSigHtml = adm?.firma ? `<img src="${adm.firma}" style="height:40px;max-width:100%;"/>` : `<span style="font-family:Georgia,serif;font-size:18px;">${(adm?.nombre||'Responsable').split(' ').slice(0,2).join(' ')}</span>`;
+  const empSigHtml = emp?.firma ? `<img src="${emp.firma}" style="height:40px;max-width:100%;"/>` : `<span style="font-family:Georgia,serif;font-size:18px;">${escapeHtml((emp?.nombre||'').split(' ').slice(0,2).join(' '))}</span>`;
+  const admSigHtml = adm?.firma ? `<img src="${adm.firma}" style="height:40px;max-width:100%;"/>` : `<span style="font-family:Georgia,serif;font-size:18px;">${escapeHtml((adm?.nombre||'Responsable').split(' ').slice(0,2).join(' '))}</span>`;
   const approvedDate = s.aprobado_en ? new Date(s.aprobado_en).toLocaleDateString('es-ES') : fmt(s.fecha_inicio);
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Solicitud Teletrabajo</title>
   <style>body{font-family:Arial,sans-serif;margin:40px;font-size:13px;color:#222;}h2{font-size:16px;text-align:center;letter-spacing:.5px;margin-bottom:20px;}p{margin:5px 0;}strong{font-weight:600;}
   .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px;}.sig-area{border-bottom:1px solid #999;min-height:50px;padding-bottom:6px;}.sig-label{font-size:10px;color:#888;margin-bottom:6px;}</style></head><body>
   <h2>SOLICITUD DE TELETRABAJO DESDE UBICACIÓN ALTERNATIVA</h2>
-  <p>D./Dña. <strong>${emp?.nombre||'—'}</strong>, con DNI <strong>${emp?.dni||'—'}</strong>, perteneciente al departamento de <strong>${emp?.departamento||'—'}</strong>, solicita autorización para desempeñar sus funciones en modalidad de teletrabajo desde una ubicación alternativa a la habitual.</p>
+  <p>D./Dña. <strong>${escapeHtml(emp?.nombre||'—')}</strong>, con DNI <strong>${escapeHtml(emp?.dni||'—')}</strong>, perteneciente al departamento de <strong>${escapeHtml(emp?.departamento||'—')}</strong>, solicita autorización para desempeñar sus funciones en modalidad de teletrabajo desde una ubicación alternativa a la habitual.</p>
   <br/><p><strong>Período:</strong> del <strong>${fmt(s.fecha_inicio)}</strong> al <strong>${fmt(s.fecha_fin)}</strong></p>
   <p><strong>Ubicación:</strong> <strong>${loc}</strong></p>
   <p><strong>Dirección:</strong> <strong>${addr}</strong></p>
