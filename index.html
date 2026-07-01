@@ -5143,7 +5143,7 @@ async function renderCWAdminProjects(){
       </div>
       <button onclick="cwDeleteProject('${p.id}',this)" style="border:none;background:none;cursor:pointer;color:#ef5350;font-size:14px;padding:4px;" title="Eliminar"><i class="ti ti-trash"></i></button>
     </div>`).join('');
-  ['cw-admin-proj-list','anl-admin-proj-list'].forEach(id=>{
+  ['cw-admin-proj-list'].forEach(id=>{
     const el=document.getElementById(id); if(!el)return;
     el.innerHTML=rows||'<div style="font-size:13px;color:var(--text2);">Sin proyectos todavía.</div>';
   });
@@ -5202,7 +5202,6 @@ async function initAnalisis(){
       const sel=document.getElementById('anl-user');
       sel.innerHTML='<option value="">Todos</option>'+anlUsers.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)}</option>`).join('');
       document.querySelectorAll('#anl-section .admin-only').forEach(el=>el.style.display='');
-      document.getElementById('anl-admin-projects').style.display='';
       await renderCWAdminProjects();
     }
     anlLoaded=true;
@@ -5438,109 +5437,92 @@ async function anlSendEmailReport(){
   <!-- ==================== FICHAJE ==================== -->
   <div id="tab-fichaje" class="panel">
     <!-- WIP Banner -->
-    <div style="display:flex;align-items:center;gap:10px;background:#fff8e1;border:1px solid #ffc107;border-radius:10px;padding:10px 16px;margin-bottom:16px;">
-      <i class="ti ti-tools" style="color:#f59e0b;font-size:18px;flex-shrink:0;"></i>
-      <div><strong style="font-size:13px;color:#92400e;">Módulo en construcción (WIP)</strong><span style="font-size:12px;color:#78350f;margin-left:8px;">Las funcionalidades de fichaje se irán completando. Los datos se guardan en la base de datos propia.</span></div>
-    </div>
-
     <!-- Estado de carga / error -->
     <div id="fichaje-loading" style="text-align:center;padding:40px;color:var(--text2);font-size:14px;">
-      <i class="ti ti-loader-2" style="font-size:28px;display:block;margin-bottom:8px;animation:spin 1s linear infinite;"></i>Cargando fichaje…
+      <i class="ti ti-loader-2" style="font-size:28px;display:block;margin-bottom:8px;animation:spin 1s linear infinite;"></i>Cargando…
     </div>
     <div id="fichaje-no-config" style="display:none;text-align:center;padding:40px;">
       <i class="ti ti-clock-off" style="font-size:44px;color:var(--text2);display:block;margin-bottom:12px;"></i>
-      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Clockify no configurado</div>
-      <div style="font-size:13px;color:var(--text2);max-width:360px;margin:0 auto;">No se ha podido cargar tu perfil. Prueba a recargar la página o contacta con el administrador.</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Sin configuración</div>
+      <div style="font-size:13px;color:var(--text2);">No se pudo cargar tu perfil. Recarga o contacta con el administrador.</div>
     </div>
     <div id="fichaje-error" style="display:none;text-align:center;padding:40px;">
       <i class="ti ti-wifi-off" style="font-size:44px;color:#ef5350;display:block;margin-bottom:12px;"></i>
-      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Error al conectar con Clockify</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Error de conexión</div>
       <div id="fichaje-error-msg" style="font-size:13px;color:var(--text2);"></div>
       <button onclick="initClockify()" class="btn btn-ghost btn-sm" style="margin-top:12px;">Reintentar</button>
     </div>
 
     <!-- Contenido principal -->
     <div id="fichaje-content" style="display:none;">
-      <!-- Timer activo (cuando hay uno corriendo) -->
-      <!-- Banner cronómetro activo -->
-      <div id="cw-running-banner" style="display:none;flex-direction:column;gap:10px;background:linear-gradient(135deg,#e8f5e9,#f1f8e9);border:1.5px solid #a5d6a7;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+
+      <!-- BANNER: cronómetro activo (se muestra solo cuando hay timer corriendo) -->
+      <div id="cw-running-banner" style="display:none;flex-direction:column;gap:8px;background:linear-gradient(135deg,#e8f5e9,#f1f8e9);border:1.5px solid #a5d6a7;border-radius:12px;padding:12px 16px;margin-bottom:12px;">
+        <!-- Fila 1: estado + timer + parar -->
         <div style="display:flex;align-items:center;gap:12px;">
-          <span style="width:11px;height:11px;border-radius:50%;background:#43a047;animation:cwpulse 1.4s infinite;flex-shrink:0;"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#43a047;animation:cwpulse 1.4s infinite;flex-shrink:0;"></span>
           <div style="flex:1;min-width:0;">
-            <div id="cw-running-label" style="font-size:13px;font-weight:600;color:#1b5e20;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+            <div id="cw-running-label" style="font-size:13px;font-weight:600;color:#1b5e20;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
             <div id="cw-running-project" style="font-size:11px;color:#388e3c;margin-top:1px;"></div>
           </div>
-          <div id="cw-running-time" style="font-size:26px;font-weight:700;color:#2e7d32;font-variant-numeric:tabular-nums;flex-shrink:0;min-width:90px;text-align:right;"></div>
-          <button onclick="stopCWTimer(this)" style="padding:9px 18px;background:#ef5350;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:6px;transition:.15s;" onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#ef5350'">
-            <i class="ti ti-square-filled" style="font-size:13px;"></i> Parar
+          <div id="cw-running-time" style="font-size:24px;font-weight:700;color:#2e7d32;font-variant-numeric:tabular-nums;flex-shrink:0;"></div>
+          <button onclick="stopCWTimer(this)" style="padding:7px 16px;background:#ef5350;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:5px;transition:.15s;" onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#ef5350'">
+            <i class="ti ti-square-filled" style="font-size:12px;"></i> Parar
           </button>
         </div>
-        <!-- Edición en vivo del timer activo -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid #c8e6c9;padding-top:10px;">
-          <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
-            <span style="font-size:11px;color:#388e3c;font-weight:600;">FECHA</span>
-            <input type="date" id="cw-running-date" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;width:130px;" onchange="cwLiveUpdateStart()">
-            <span style="font-size:11px;color:#388e3c;font-weight:600;">INICIO</span>
-            <input type="time" id="cw-running-start" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;width:80px;" onchange="cwLiveUpdateStart()">
-          </div>
-          <select id="cw-running-tipo" style="flex:1;min-width:120px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
-          <input type="text" id="cw-running-desc" placeholder="Descripción…" maxlength="200" style="flex:2;min-width:140px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 8px;font-size:12px;background:#fff;color:#1b5e20;" oninput="cwLiveUpdateFields()">
-          <select id="cw-running-proj" style="flex:1;min-width:130px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
+        <!-- Fila 2: edición en vivo -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px solid #c8e6c9;padding-top:8px;">
+          <input type="date" id="cw-running-date" title="Fecha" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;width:120px;" onchange="cwLiveUpdateStart()">
+          <input type="time" id="cw-running-start" title="Hora inicio" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;width:78px;" onchange="cwLiveUpdateStart()">
+          <select id="cw-running-tipo" title="Tipo de tarea" style="flex:1;min-width:110px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
+          <input type="text" id="cw-running-desc" placeholder="Descripción (opcional)" maxlength="200" style="flex:2;min-width:120px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;" oninput="cwLiveUpdateFields()">
+          <select id="cw-running-proj" title="Proyecto" style="flex:1;min-width:110px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
         </div>
       </div>
 
-      <!-- COLUMNAS: izq = acciones, der = hoy -->
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:14px;margin-bottom:14px;align-items:start;">
-
-        <!-- Columna izquierda: Iniciar + Entrada manual -->
-        <div style="display:flex;flex-direction:column;gap:12px;min-width:0;">
-
-          <!-- Botón iniciar -->
-          <div id="cw-start-wrap" class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 16px;">
-            <button onclick="startCWTimer(this)" class="btn btn-primary" style="gap:8px;font-size:15px;padding:10px 28px;border-radius:10px;">
-              <i class="ti ti-player-play-filled"></i> Iniciar cronómetro
-            </button>
-            <span style="font-size:11px;color:var(--text2);text-align:center;">Rellena tipo y proyecto mientras corre</span>
-          </div>
-
-          <!-- Entrada manual -->
-          <div class="card" style="padding:14px 16px;">
-            <div class="card-title" style="margin-bottom:12px;font-size:13px;"><i class="ti ti-clock-edit grad-icon"></i> Añadir con hora fija</div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <select id="cw-tipo" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);">
-                <option value="">— Tipo de tarea —</option>
-              </select>
-              <select id="cw-project" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);">
-                <option value="">Sin proyecto</option>
-              </select>
-              <input type="text" id="cw-desc" placeholder="Descripción (opcional)" maxlength="200" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"/>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <input type="time" id="cw-manual-start" value="09:00" style="flex:1;min-width:0;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 6px;font-size:13px;background:var(--surface);color:var(--text);"/>
-                <span style="color:var(--text2);flex-shrink:0;">→</span>
-                <input type="time" id="cw-manual-end" value="10:00" style="flex:1;min-width:0;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 6px;font-size:13px;background:var(--surface);color:var(--text);"/>
-              </div>
-              <input type="date" id="cw-manual-date" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"/>
-              <button onclick="addManualCWEntry(this)" class="btn btn-primary btn-sm" style="align-self:flex-end;"><i class="ti ti-plus"></i> Añadir entrada</button>
+      <!-- HOY (card principal) -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="cw-today-total" style="font-size:15px;font-weight:700;color:var(--primary);"></span>
+            <!-- Botón iniciar: visible solo cuando NO hay timer corriendo -->
+            <div id="cw-start-wrap">
+              <button onclick="startCWTimer(this)" class="btn btn-primary btn-sm" style="gap:6px;">
+                <i class="ti ti-player-play-filled"></i> Iniciar
+              </button>
             </div>
-          </div>
-
-        </div>
-
-        <!-- Columna derecha: Hoy -->
-        <div class="card" style="min-height:200px;min-width:0;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span id="cw-today-total" style="font-size:16px;font-weight:700;color:var(--primary);"></span>
-              <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
-            </div>
-          </div>
-          <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
-            <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
+            <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
           </div>
         </div>
-
+        <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
+          <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
+        </div>
       </div>
+
+      <!-- AÑADIR CON HORA FIJA (colapsado por defecto) -->
+      <details class="card" style="margin-bottom:12px;">
+        <summary style="font-size:13px;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:2px 0;">
+          <i class="ti ti-clock-plus grad-icon"></i> Añadir entrada con hora fija
+          <i class="ti ti-chevron-down" style="margin-left:auto;color:var(--text2);font-size:13px;"></i>
+        </summary>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <select id="cw-tipo" style="flex:1;min-width:140px;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);">
+            <option value="">— Tipo —</option>
+          </select>
+          <select id="cw-project" style="flex:1;min-width:150px;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);">
+            <option value="">Sin proyecto</option>
+          </select>
+          <input type="text" id="cw-desc" placeholder="Descripción (opcional)" maxlength="200" style="flex:2;min-width:160px;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"/>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <input type="time" id="cw-manual-start" value="09:00" style="border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 8px;font-size:13px;background:var(--surface);color:var(--text);width:100px;"/>
+            <span style="color:var(--text2);">→</span>
+            <input type="time" id="cw-manual-end" value="10:00" style="border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 8px;font-size:13px;background:var(--surface);color:var(--text);width:100px;"/>
+          </div>
+          <input type="date" id="cw-manual-date" style="border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--surface);color:var(--text);flex-shrink:0;"/>
+          <button onclick="addManualCWEntry(this)" class="btn btn-primary btn-sm" style="flex-shrink:0;"><i class="ti ti-plus"></i> Añadir</button>
+        </div>
+      </details>
 
       <!-- VISTA SEMANAL -->
       <div class="card" style="margin-top:12px;">
@@ -5631,21 +5613,6 @@ async function anlSendEmailReport(){
           </div>
           <div style="flex:1;height:1px;background:var(--border2);"></div>
         </div>
-
-      <!-- Panel admin: proyectos (compartido con Capacidad y Fichaje) -->
-      <div id="anl-admin-projects" class="card admin-only" style="display:none;margin-bottom:14px;">
-        <div style="font-weight:600;font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-          <i class="ti ti-briefcase grad-icon"></i> Proyectos
-          <span style="font-size:11px;font-weight:400;color:var(--text2);">— compartidos con Capacidad y Fichaje</span>
-        </div>
-        <div data-proj-form style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border2);">
-          <input class="proj-name form-control" type="text" placeholder="Nombre del proyecto" style="flex:2;min-width:160px;">
-          <input class="proj-client form-control" type="text" placeholder="Cliente (opcional)" style="flex:2;min-width:140px;">
-          <input class="proj-color" type="color" value="#1565C0" style="width:42px;height:38px;border:1px solid var(--border2);border-radius:8px;cursor:pointer;padding:2px;">
-          <button class="btn btn-primary btn-sm" onclick="cwAddProject(this)"><i class="ti ti-plus"></i> Crear</button>
-        </div>
-        <div id="anl-admin-proj-list" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;"></div>
-      </div>
 
       <!-- Filtros -->
       <div class="card" style="margin-bottom:14px;">
