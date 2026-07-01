@@ -4825,11 +4825,54 @@ function showRunningBanner(){
   if(!cwRunningEntry)return;
   const banner=document.getElementById('cw-running-banner'); if(!banner)return;
   banner.style.display='flex';
-  const fullDesc=cwRunningEntry.descripcion||'';
-  document.getElementById('cw-running-label').textContent=`${cwRunningEntry.tipo}_${fullDesc}`||'(sin descripción)';
-  const dot=banner.querySelector('span'); if(dot)dot.style.background=tipoColor(cwRunningEntry.tipo);
-  document.getElementById('cw-running-project').textContent=entryProjName(cwRunningEntry);
+  cwRefreshRunningLabel();
   startTimerDisplay();
+  // Rellenar los campos de edición en vivo
+  const startTime=new Date(cwRunningEntry.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+  const rs=document.getElementById('cw-running-start'); if(rs)rs.value=startTime;
+  const rt=document.getElementById('cw-running-tipo');
+  if(rt){
+    rt.innerHTML='<option value="">— Tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
+    rt.value=cwRunningEntry.tipo||'';
+  }
+  const rd=document.getElementById('cw-running-desc'); if(rd)rd.value=cwRunningEntry.descripcion||'';
+  const rp=document.getElementById('cw-running-proj');
+  if(rp){
+    rp.innerHTML='<option value="">Sin proyecto</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
+    rp.value=cwRunningEntry.proyecto_id||'';
+  }
+}
+function cwRefreshRunningLabel(){
+  if(!cwRunningEntry)return;
+  const tipo=cwRunningEntry.tipo||'';
+  const desc=cwRunningEntry.descripcion||'';
+  const label=tipo?(desc?`${tipo}_${desc}`:tipo):(desc||'Sin datos aún');
+  document.getElementById('cw-running-label').textContent=label;
+  const dot=document.getElementById('cw-running-banner')?.querySelector('span');
+  if(dot)dot.style.background=tipo?tipoColor(tipo):'#43a047';
+  document.getElementById('cw-running-project').textContent=entryProjName(cwRunningEntry);
+}
+
+let cwLiveDebounce=null;
+function cwLiveUpdateFields(){
+  clearTimeout(cwLiveDebounce);
+  cwLiveDebounce=setTimeout(async()=>{
+    if(!cwRunningEntry)return;
+    const tipo=document.getElementById('cw-running-tipo').value||null;
+    const desc=document.getElementById('cw-running-desc').value.trim()||null;
+    const proj=document.getElementById('cw-running-proj').value||null;
+    cwRunningEntry={...cwRunningEntry,tipo,descripcion:desc,proyecto_id:proj};
+    cwRefreshRunningLabel();
+    await supa.from('time_entries').update({tipo,descripcion:desc,proyecto_id:proj}).eq('id',cwRunningEntry.id);
+  },600);
+}
+async function cwLiveUpdateStart(){
+  if(!cwRunningEntry)return;
+  const val=document.getElementById('cw-running-start').value; if(!val)return;
+  const fecha=cwRunningEntry.hora_inicio.split('T')[0];
+  const newStart=new Date(`${fecha}T${val}:00`).toISOString();
+  cwRunningEntry={...cwRunningEntry,hora_inicio:newStart};
+  await supa.from('time_entries').update({hora_inicio:newStart}).eq('id',cwRunningEntry.id);
 }
 function hideRunningBanner(){
   const b=document.getElementById('cw-running-banner'); if(b)b.style.display='none';
@@ -4862,8 +4905,8 @@ function updateCWPreview(){
 }
 
 async function startCWTimer(btn){
-  const tipo=document.getElementById('cw-tipo').value, desc=document.getElementById('cw-desc').value.trim();
-  if(!tipo){alert('Selecciona el tipo de tarea.');return;}
+  const tipo=document.getElementById('cw-tipo').value||null;
+  const desc=document.getElementById('cw-desc').value.trim()||null;
   const projId=document.getElementById('cw-project').value||null;
   const today=new Date().toISOString().split('T')[0];
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Iniciando…';
@@ -4917,14 +4960,76 @@ async function loadCWToday(){
   if(totEl)totEl.textContent=tot>0?fmtDur(tot):'';
   if(!list)return;
   if(!entries.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px;">Sin entradas hoy todavía</div>';return;}
+  const tipoOpts='<option value="">— Tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
+  const projOpts='<option value="">Sin proyecto</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
   list.innerHTML=entries.map(e=>{
-    const fullDesc=`${e.tipo}_${e.descripcion||''}`, color=tipoColor(e.tipo);
+    const label=(e.tipo&&e.descripcion)?`${e.tipo}_${e.descripcion}`:e.tipo||e.descripcion||'(sin datos)';
+    const color=tipoColor(e.tipo);
     const dur=fmtDur(entryDur(e));
     const st=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
     const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const stV=new Date(e.hora_inicio).toTimeString().slice(0,5);
+    const enV=new Date(e.hora_fin).toTimeString().slice(0,5);
     const pn=entryProjName(e);
-    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(fullDesc)}</div><div class="cw-entry-sub">${st}–${en}${pn?' · '+escapeHtml(pn):''}</div></div><span class="cw-entry-dur">${dur}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
+    const eid=e.id.replace(/-/g,'');
+    return `<div style="border-radius:9px;border:1px solid var(--border2);overflow:hidden;background:var(--surface2);">
+      <div class="cw-entry" style="border:none;background:transparent;">
+        <span class="cw-tipo-dot" style="background:${color};"></span>
+        <div class="cw-entry-info">
+          <div class="cw-entry-desc">${escapeHtml(label)}</div>
+          <div class="cw-entry-sub">${st}–${en}${pn?' · '+escapeHtml(pn):''}</div>
+        </div>
+        <span class="cw-entry-dur">${dur}</span>
+        <button onclick="cwToggleEdit('${eid}')" title="Editar" style="background:none;border:none;color:var(--text2);cursor:pointer;padding:4px;border-radius:5px;font-size:15px;line-height:1;transition:.15s;" onmouseover="this.style.color='#1565C0'" onmouseout="this.style.color='var(--text2)'"><i class="ti ti-pencil"></i></button>
+        <button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button>
+      </div>
+      <div id="cwedit-${eid}" style="display:none;padding:10px 12px;border-top:1px solid var(--border2);background:var(--surface);">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--text2);font-weight:600;">DE</span>
+            <input type="time" value="${stV}" class="form-input" style="width:90px;font-size:12px;padding:5px 7px;" data-field="start">
+            <span style="font-size:11px;color:var(--text2);font-weight:600;">A</span>
+            <input type="time" value="${enV}" class="form-input" style="width:90px;font-size:12px;padding:5px 7px;" data-field="end">
+          </div>
+          <select class="form-select" style="flex:1;min-width:110px;font-size:12px;padding:5px 7px;" data-field="tipo">${tipoOpts}</select>
+          <input type="text" value="${escapeHtml(e.descripcion||'')}" class="form-input" placeholder="Descripción" maxlength="200" style="flex:2;min-width:130px;font-size:12px;padding:5px 8px;" data-field="desc">
+          <select class="form-select" style="flex:1;min-width:130px;font-size:12px;padding:5px 7px;" data-field="proj">${projOpts}</select>
+          <button onclick="cwSaveEntryEdit('${e.id}','${eid}','${e.fecha}',this)" class="btn btn-primary btn-sm" style="flex-shrink:0;font-size:12px;"><i class="ti ti-check"></i> Guardar</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
+  // Set select values after render
+  entries.forEach(e=>{
+    const eid=e.id.replace(/-/g,'');
+    const box=document.getElementById(`cwedit-${eid}`); if(!box)return;
+    box.querySelector('[data-field="tipo"]').value=e.tipo||'';
+    box.querySelector('[data-field="proj"]').value=e.proyecto_id||'';
+  });
+}
+
+function cwToggleEdit(eid){
+  const el=document.getElementById(`cwedit-${eid}`);
+  if(el)el.style.display=el.style.display==='none'?'':'none';
+}
+
+async function cwSaveEntryEdit(id,eid,fecha,btn){
+  const box=document.getElementById(`cwedit-${eid}`);
+  const stV=box.querySelector('[data-field="start"]').value;
+  const enV=box.querySelector('[data-field="end"]').value;
+  const tipo=box.querySelector('[data-field="tipo"]').value||null;
+  const desc=box.querySelector('[data-field="desc"]').value.trim()||null;
+  const proj=box.querySelector('[data-field="proj"]').value||null;
+  if(stV&&enV&&stV>=enV){alert('La hora de fin debe ser posterior al inicio.');return;}
+  btn.disabled=true;
+  const updates={tipo,descripcion:desc,proyecto_id:proj};
+  if(stV) updates.hora_inicio=new Date(`${fecha}T${stV}:00`).toISOString();
+  if(enV) updates.hora_fin=new Date(`${fecha}T${enV}:00`).toISOString();
+  const {error}=await supa.from('time_entries').update(updates).eq('id',id);
+  btn.disabled=false;
+  if(error){alert('Error al guardar.');return;}
+  showToast('Entrada actualizada ✓');
+  await loadCWToday(); await loadCWWeek();
 }
 
 async function deleteCWEntry(id,btn){
@@ -5327,16 +5432,29 @@ async function anlSendEmailReport(){
     <!-- Contenido principal -->
     <div id="fichaje-content" style="display:none;">
       <!-- Timer activo (cuando hay uno corriendo) -->
-      <div id="cw-running-banner" style="display:none;align-items:center;gap:12px;background:linear-gradient(90deg,#e8f5e9,#f1f8e9);border:1.5px solid #a5d6a7;border-radius:12px;padding:12px 16px;margin-bottom:14px;">
-        <span style="width:11px;height:11px;border-radius:50%;background:#43a047;animation:cwpulse 1.4s infinite;flex-shrink:0;"></span>
-        <div style="flex:1;min-width:0;">
-          <div id="cw-running-label" style="font-size:13px;font-weight:600;color:#1b5e20;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-          <div id="cw-running-project" style="font-size:11px;color:#388e3c;margin-top:1px;"></div>
+      <!-- Banner cronómetro activo -->
+      <div id="cw-running-banner" style="display:none;flex-direction:column;gap:10px;background:linear-gradient(135deg,#e8f5e9,#f1f8e9);border:1.5px solid #a5d6a7;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="width:11px;height:11px;border-radius:50%;background:#43a047;animation:cwpulse 1.4s infinite;flex-shrink:0;"></span>
+          <div style="flex:1;min-width:0;">
+            <div id="cw-running-label" style="font-size:13px;font-weight:600;color:#1b5e20;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+            <div id="cw-running-project" style="font-size:11px;color:#388e3c;margin-top:1px;"></div>
+          </div>
+          <div id="cw-running-time" style="font-size:26px;font-weight:700;color:#2e7d32;font-variant-numeric:tabular-nums;flex-shrink:0;min-width:90px;text-align:right;"></div>
+          <button onclick="stopCWTimer(this)" style="padding:9px 18px;background:#ef5350;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:6px;transition:.15s;" onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#ef5350'">
+            <i class="ti ti-square-filled" style="font-size:13px;"></i> Parar
+          </button>
         </div>
-        <div id="cw-running-time" style="font-size:26px;font-weight:700;color:#2e7d32;font-variant-numeric:tabular-nums;flex-shrink:0;"></div>
-        <button onclick="stopCWTimer(this)" style="padding:9px 18px;background:#ef5350;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:6px;transition:.15s;" onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#ef5350'">
-          <i class="ti ti-square-filled" style="font-size:13px;"></i> Parar
-        </button>
+        <!-- Edición en vivo del timer activo -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid #c8e6c9;padding-top:10px;">
+          <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+            <span style="font-size:11px;color:#388e3c;font-weight:600;">INICIO</span>
+            <input type="time" id="cw-running-start" style="border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;width:80px;" onchange="cwLiveUpdateStart()">
+          </div>
+          <select id="cw-running-tipo" style="flex:1;min-width:120px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
+          <input type="text" id="cw-running-desc" placeholder="Descripción…" maxlength="200" style="flex:2;min-width:140px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 8px;font-size:12px;background:#fff;color:#1b5e20;" oninput="cwLiveUpdateFields()">
+          <select id="cw-running-proj" style="flex:1;min-width:130px;border:1px solid #a5d6a7;border-radius:6px;padding:4px 7px;font-size:12px;background:#fff;color:#1b5e20;" onchange="cwLiveUpdateFields()"></select>
+        </div>
       </div>
 
       <div class="grid2" style="align-items:start;gap:12px;">
@@ -5369,7 +5487,7 @@ async function anlSendEmailReport(){
 
           <!-- Preview nomenclatura -->
           <div id="cw-preview-box" style="background:var(--surface2);border-radius:9px;padding:11px 14px;margin-bottom:12px;border:1.5px solid var(--border2);transition:.2s;">
-            <div style="font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px;">Vista previa · Clockify</div>
+            <div style="font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px;">Vista previa · nomenclatura</div>
             <div style="display:flex;align-items:flex-start;gap:8px;">
               <div id="cw-preview-tipo-dot" style="width:10px;height:10px;border-radius:50%;background:var(--border2);flex-shrink:0;margin-top:4px;"></div>
               <div style="flex:1;min-width:0;">
