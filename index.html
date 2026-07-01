@@ -4752,7 +4752,7 @@ async function saveAddEmployee() {
   });
 }
 
-// ===== FICHAJE (CLOCKIFY) =====
+// ===== FICHAJE =====
 const TIPOS_TAREA = [
   { id:'Admin',         desc:'Gestión de empresa, personal…',                             color:'#78909C' },
   { id:'Design',        desc:'Diseño de interfaz de usuario',                             color:'#EC407A' },
@@ -4769,45 +4769,25 @@ const TIPOS_TAREA = [
   { id:'Training',      desc:'Formación, cursos, eventos, certificaciones…',             color:'#FF7043' },
 ];
 
-let cwWorkspaceId=null, cwProjects=[], cwTimerInterval=null, cwRunningEntry=null;
+let cwProjects=[], cwTimerInterval=null, cwRunningEntry=null;
 let cwWeekOffset=0, cwSelectedDay=null, cwWeekEntries=[];
 
 const tipoColor=id=>(TIPOS_TAREA.find(t=>t.id===id)||{color:'#90A4AE'}).color;
 const tipoDesc =id=>(TIPOS_TAREA.find(t=>t.id===id)||{desc:''}).desc;
-
-async function clockifyApi(path,method='GET',body=null){
-  const {data:{session}}=await supa.auth.getSession();
-  if(!session)return null;
-  try{
-    const r=await fetch('https://xezltxsmxyvgwisiemqf.supabase.co/functions/v1/clockify-proxy',{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+session.access_token,'Content-Type':'application/json'},
-      body:JSON.stringify({path,method,body}),
-    });
-    const txt=await r.text();
-    if(!r.ok){console.error('CW',r.status,txt);return null;}
-    return JSON.parse(txt);
-  }catch(e){console.error('CW',e);return null;}
-}
+const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${h}h ${String(m).padStart(2,'0')}m`:`${m}m ${String(sec).padStart(2,'0')}s`;};
+const entryDur=e=>{const s=new Date(e.hora_inicio),en=e.hora_fin?new Date(e.hora_fin):new Date();return Math.floor((en-s)/1000);};
+const entryProjName=e=>e.proyectos?.nombre||'';
 
 async function initClockify(){
   ['fichaje-loading','fichaje-content','fichaje-no-config','fichaje-error'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.style.display='none';
   });
   document.getElementById('fichaje-loading').style.display='';
-  if(!supaProfile?.clockify_user_id){
+  if(!supaProfile){
     document.getElementById('fichaje-loading').style.display='none';
     document.getElementById('fichaje-no-config').style.display='';
     return;
   }
-  const ws=await clockifyApi('/workspaces');
-  if(!ws||!ws.length){
-    document.getElementById('fichaje-loading').style.display='none';
-    document.getElementById('fichaje-error').style.display='';
-    document.getElementById('fichaje-error-msg').textContent='No se pudo conectar con Clockify. Verifica que la API key esté configurada en Supabase (CLOCKIFY_API_KEY).';
-    return;
-  }
-  cwWorkspaceId=ws[0].id;
   const sel=document.getElementById('cw-tipo');
   if(sel) sel.innerHTML='<option value="">— Selecciona tipo —</option>'+TIPOS_TAREA.map(t=>`<option value="${t.id}">${t.id}</option>`).join('');
   const tbody=document.getElementById('cw-guide-tbody');
@@ -4816,22 +4796,23 @@ async function initClockify(){
   const md=document.getElementById('cw-manual-date'); if(md) md.value=today;
   await Promise.all([loadCWProjects(),checkRunningCWTimer()]);
   await loadCWToday(); cwWeekOffset=0; await loadCWWeek();
+  if(supaProfile.rol==='admin') renderCWAdminProjects();
   document.getElementById('fichaje-loading').style.display='none';
   document.getElementById('fichaje-content').style.display='';
 }
 
 async function loadCWProjects(){
-  if(!cwWorkspaceId)return;
-  const p=await clockifyApi(`/workspaces/${cwWorkspaceId}/projects?archived=false&page-size=200`);
-  if(!p)return; cwProjects=p;
+  const {data,error}=await supa.from('proyectos').select('*').eq('activo',true).order('nombre');
+  if(error){console.error('CW proyectos',error);return;}
+  cwProjects=data||[];
   const sel=document.getElementById('cw-project');
-  if(sel) sel.innerHTML='<option value="">Sin proyecto asignado</option>'+cwProjects.map(pr=>`<option value="${pr.id}">${escapeHtml(pr.name)}</option>`).join('');
+  if(sel) sel.innerHTML='<option value="">Sin proyecto asignado</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
 }
 
 async function checkRunningCWTimer(){
-  if(!cwWorkspaceId||!supaProfile?.clockify_user_id)return;
-  const entries=await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${supaProfile.clockify_user_id}/time-entries?in-progress=true&page-size=1`);
-  if(entries&&entries.length>0){cwRunningEntry=entries[0];showRunningBanner();}
+  if(!supaUser?.id)return;
+  const {data}=await supa.from('time_entries').select('*, proyectos(nombre,color)').eq('usuario_id',supaUser.id).is('hora_fin',null).maybeSingle();
+  if(data){cwRunningEntry=data;showRunningBanner();}
   else{cwRunningEntry=null;hideRunningBanner();}
 }
 
@@ -4839,12 +4820,10 @@ function showRunningBanner(){
   if(!cwRunningEntry)return;
   const banner=document.getElementById('cw-running-banner'); if(!banner)return;
   banner.style.display='flex';
-  const desc=cwRunningEntry.description||'';
-  const tipo=desc.split('_')[0]||'';
-  document.getElementById('cw-running-label').textContent=desc||'(sin descripción)';
-  banner.querySelector('span').style.background=tipoColor(tipo);
-  const proj=cwProjects.find(p=>p.id===cwRunningEntry.projectId);
-  document.getElementById('cw-running-project').textContent=proj?proj.name:'';
+  const fullDesc=cwRunningEntry.descripcion||'';
+  document.getElementById('cw-running-label').textContent=`${cwRunningEntry.tipo}_${fullDesc}`||'(sin descripción)';
+  const dot=banner.querySelector('span'); if(dot)dot.style.background=tipoColor(cwRunningEntry.tipo);
+  document.getElementById('cw-running-project').textContent=entryProjName(cwRunningEntry);
   startTimerDisplay();
 }
 function hideRunningBanner(){
@@ -4855,7 +4834,7 @@ function startTimerDisplay(){
   if(cwTimerInterval)clearInterval(cwTimerInterval);
   cwTimerInterval=setInterval(()=>{
     if(!cwRunningEntry)return;
-    const elapsed=Math.floor((Date.now()-new Date(cwRunningEntry.timeInterval.start).getTime())/1000);
+    const elapsed=Math.floor((Date.now()-new Date(cwRunningEntry.hora_inicio).getTime())/1000);
     const h=Math.floor(elapsed/3600),m=Math.floor((elapsed%3600)/60),s=elapsed%60;
     const el=document.getElementById('cw-running-time');
     if(el)el.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
@@ -4870,7 +4849,7 @@ function updateCWPreview(){
   const td=document.getElementById('cw-tipo-desc'); if(td)td.textContent=tipo?tipoDesc(tipo):'';
   const dot=document.getElementById('cw-preview-tipo-dot'); if(dot)dot.style.background=tipo?tipoColor(tipo):'var(--border2)';
   document.getElementById('cw-preview-desc').textContent=tipo?(desc?`${tipo}_${desc}`:`${tipo}_`):(desc||'—');
-  document.getElementById('cw-preview-project').textContent=proj?proj.name:'Sin proyecto';
+  document.getElementById('cw-preview-project').textContent=proj?proj.nombre:'Sin proyecto';
   const vi=document.getElementById('cw-valid-icon'), vm=document.getElementById('cw-valid-msg');
   if(tipo&&desc){vi.textContent='✅';vm.style.display='none';}
   else if(tipo&&!desc){vi.textContent='⚠️';vm.style.display='';vm.style.color='#e65100';vm.textContent='Falta la descripción (TipoTarea_descripción)';}
@@ -4882,20 +4861,26 @@ async function startCWTimer(btn){
   const tipo=document.getElementById('cw-tipo').value, desc=document.getElementById('cw-desc').value.trim();
   if(!tipo){alert('Selecciona el tipo de tarea.');return;}
   if(!desc){alert('Añade una descripción.');return;}
-  const projId=document.getElementById('cw-project').value||undefined;
+  const projId=document.getElementById('cw-project').value||null;
+  const today=new Date().toISOString().split('T')[0];
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Iniciando…';
-  const entry=await clockifyApi(`/workspaces/${cwWorkspaceId}/time-entries`,'POST',{start:new Date().toISOString(),description:`${tipo}_${desc}`,projectId:projId,billable:false});
+  const {data,error}=await supa.from('time_entries').insert({
+    usuario_id:supaUser.id, tipo, descripcion:desc,
+    proyecto_id:projId, fecha:today, hora_inicio:new Date().toISOString()
+  }).select('*, proyectos(nombre,color)').single();
   btn.disabled=false; btn.innerHTML='<i class="ti ti-player-play-filled"></i> Iniciar cronómetro';
-  if(!entry){alert('Error al iniciar el timer en Clockify.');return;}
-  cwRunningEntry=entry; showRunningBanner(); showToast('Cronómetro iniciado ✓');
+  if(error){console.error(error);alert('Error al iniciar el cronómetro.');return;}
+  cwRunningEntry=data; showRunningBanner(); showToast('Cronómetro iniciado ✓');
 }
 
 async function stopCWTimer(btn){
   if(!cwRunningEntry)return;
   btn.disabled=true; btn.textContent='Parando…';
-  await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${supaProfile.clockify_user_id}/time-entries`,'PATCH',{end:new Date().toISOString()});
-  btn.disabled=false; cwRunningEntry=null; hideRunningBanner();
-  showToast('Entrada registrada en Clockify ✓');
+  const {error}=await supa.from('time_entries').update({hora_fin:new Date().toISOString()}).eq('id',cwRunningEntry.id);
+  btn.disabled=false;
+  if(error){console.error(error);alert('Error al parar el cronómetro.');return;}
+  cwRunningEntry=null; hideRunningBanner();
+  showToast('Entrada registrada ✓');
   await loadCWToday(); await loadCWWeek();
 }
 
@@ -4907,62 +4892,60 @@ async function addManualCWEntry(btn){
   if(!desc){alert('Añade una descripción.');return;}
   if(!startT||!endT||!dateV){alert('Indica fecha y hora.');return;}
   if(startT>=endT){alert('La hora de fin debe ser posterior a la de inicio.');return;}
-  const projId=document.getElementById('cw-project').value||undefined;
+  const projId=document.getElementById('cw-project').value||null;
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>';
-  const entry=await clockifyApi(`/workspaces/${cwWorkspaceId}/time-entries`,'POST',{
-    start:new Date(`${dateV}T${startT}:00`).toISOString(),end:new Date(`${dateV}T${endT}:00`).toISOString(),
-    description:`${tipo}_${desc}`,projectId:projId,billable:false,
+  const {error}=await supa.from('time_entries').insert({
+    usuario_id:supaUser.id, tipo, descripcion:desc, proyecto_id:projId, fecha:dateV,
+    hora_inicio:new Date(`${dateV}T${startT}:00`).toISOString(),
+    hora_fin:new Date(`${dateV}T${endT}:00`).toISOString(),
   });
   btn.disabled=false; btn.innerHTML='<i class="ti ti-plus"></i> Añadir';
-  if(!entry){alert('Error al crear la entrada.');return;}
+  if(error){console.error(error);alert('Error al crear la entrada.');return;}
   showToast('Entrada añadida ✓'); await loadCWToday(); await loadCWWeek();
 }
 
-const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${h}h ${String(m).padStart(2,'0')}m`:`${m}m ${String(sec).padStart(2,'0')}s`;};
-const entryDur=e=>{const s=new Date(e.timeInterval.start),en=e.timeInterval.end?new Date(e.timeInterval.end):new Date();return Math.floor((en-s)/1000);};
-
 async function loadCWToday(){
-  if(!cwWorkspaceId||!supaProfile?.clockify_user_id)return;
-  const uid=supaProfile.clockify_user_id, now=new Date();
-  const s0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString();
-  const s1=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59).toISOString();
-  const entries=await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${uid}/time-entries?start=${s0}&end=${s1}&page-size=50`);
+  if(!supaUser?.id)return;
+  const today=new Date().toISOString().split('T')[0];
+  const {data,error}=await supa.from('time_entries').select('*, proyectos(nombre,color)').eq('usuario_id',supaUser.id).eq('fecha',today).not('hora_fin','is',null).order('hora_inicio',{ascending:false});
   const list=document.getElementById('cw-today-list'), totEl=document.getElementById('cw-today-total');
-  if(!entries){if(list)list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:16px;">Error al cargar</div>';return;}
-  const fin=entries.filter(e=>e.timeInterval.end);
-  const tot=fin.reduce((a,e)=>a+entryDur(e),0);
+  if(error){if(list)list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:16px;">Error al cargar</div>';return;}
+  const entries=data||[];
+  const tot=entries.reduce((a,e)=>a+entryDur(e),0);
   if(totEl)totEl.textContent=tot>0?fmtDur(tot):'';
   if(!list)return;
-  if(!fin.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px;">Sin entradas hoy todavía</div>';return;}
-  list.innerHTML=fin.sort((a,b)=>new Date(b.timeInterval.start)-new Date(a.timeInterval.start)).map(e=>{
-    const desc=e.description||'(sin descripción)',tipo=desc.split('_')[0],color=tipoColor(tipo);
+  if(!entries.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px;">Sin entradas hoy todavía</div>';return;}
+  list.innerHTML=entries.map(e=>{
+    const fullDesc=`${e.tipo}_${e.descripcion||''}`, color=tipoColor(e.tipo);
     const dur=fmtDur(entryDur(e));
-    const st=new Date(e.timeInterval.start).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
-    const en=new Date(e.timeInterval.end).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
-    const proj=cwProjects.find(p=>p.id===e.projectId);
-    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(desc)}</div><div class="cw-entry-sub">${st}–${en}${proj?' · '+escapeHtml(proj.name):''}</div></div><span class="cw-entry-dur">${dur}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
+    const st=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const pn=entryProjName(e);
+    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(fullDesc)}</div><div class="cw-entry-sub">${st}–${en}${pn?' · '+escapeHtml(pn):''}</div></div><span class="cw-entry-dur">${dur}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
   }).join('');
 }
 
 async function deleteCWEntry(id,btn){
-  if(!confirm('¿Eliminar esta entrada de Clockify?'))return;
+  if(!confirm('¿Eliminar esta entrada?'))return;
   btn.disabled=true;
-  await clockifyApi(`/workspaces/${cwWorkspaceId}/time-entries/${id}`,'DELETE');
+  const {error}=await supa.from('time_entries').delete().eq('id',id);
+  if(error){btn.disabled=false;alert('Error al eliminar.');return;}
   showToast('Entrada eliminada ✓'); await loadCWToday(); await loadCWWeek();
 }
 
 function cwWeekNav(dir,reset=false){if(reset)cwWeekOffset=0;else cwWeekOffset+=dir;cwSelectedDay=null;loadCWWeek();}
 
 async function loadCWWeek(){
-  if(!cwWorkspaceId||!supaProfile?.clockify_user_id)return;
-  const uid=supaProfile.clockify_user_id, now=new Date();
+  if(!supaUser?.id)return;
+  const now=new Date();
   const dow=(now.getDay()+6)%7;
   const mon=new Date(now); mon.setDate(now.getDate()-dow+cwWeekOffset*7); mon.setHours(0,0,0,0);
-  const sun=new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
   const fmt=d=>d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
   const wl=document.getElementById('cw-week-label'); if(wl)wl.textContent=`${fmt(mon)} – ${fmt(sun)}`;
-  const entries=await clockifyApi(`/workspaces/${cwWorkspaceId}/user/${uid}/time-entries?start=${mon.toISOString()}&end=${sun.toISOString()}&page-size=200`);
-  cwWeekEntries=(entries||[]).filter(e=>e.timeInterval.end);
+  const monStr=mon.toISOString().split('T')[0], sunStr=sun.toISOString().split('T')[0];
+  const {data,error}=await supa.from('time_entries').select('*, proyectos(nombre,color)').eq('usuario_id',supaUser.id).gte('fecha',monStr).lte('fecha',sunStr).not('hora_fin','is',null);
+  cwWeekEntries=error?[]:(data||[]);
   const tot=cwWeekEntries.reduce((a,e)=>a+entryDur(e),0);
   const wt=document.getElementById('cw-week-total'); if(wt)wt.textContent=tot>0?`Total: ${fmtDur(tot)}`:'';
   renderCWWeekGrid(mon);
@@ -4976,7 +4959,7 @@ function renderCWWeekGrid(monday){
   for(let i=0;i<7;i++){
     const d=new Date(monday); d.setDate(monday.getDate()+i);
     const dStr=d.toISOString().split('T')[0];
-    const de=cwWeekEntries.filter(e=>e.timeInterval.start.startsWith(dStr));
+    const de=cwWeekEntries.filter(e=>e.fecha===dStr);
     const sec=de.reduce((a,e)=>a+entryDur(e),0);
     const isT=d.getTime()===today.getTime(), isSel=cwSelectedDay===dStr;
     const pct=Math.min(100,(sec/28800)*100);
@@ -4986,7 +4969,7 @@ function renderCWWeekGrid(monday){
     col.innerHTML=`<div class="cw-day-name">${DN[i]}</div><div class="cw-day-num">${d.getDate()}</div><div class="cw-day-hours">${sec>0?fmtDur(sec):'—'}</div><div class="cw-day-bar"><div class="cw-day-bar-fill" style="width:${pct}%;"></div></div>`;
     grid.appendChild(col);
   }
-  if(cwSelectedDay){const de=cwWeekEntries.filter(e=>e.timeInterval.start.startsWith(cwSelectedDay));renderCWDayDetail(de);}
+  if(cwSelectedDay){const de=cwWeekEntries.filter(e=>e.fecha===cwSelectedDay);renderCWDayDetail(de);}
 }
 
 function selectCWDay(dStr,de){
@@ -5003,16 +4986,65 @@ function renderCWDayDetail(de){
   const det=document.getElementById('cw-week-detail'); if(!det)return;
   if(!de.length){det.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:12px;">Sin entradas</div>';return;}
   const byTipo={};
-  de.forEach(e=>{const t=(e.description||'').split('_')[0]||'Sin tipo';byTipo[t]=(byTipo[t]||0)+entryDur(e);});
+  de.forEach(e=>{const t=e.tipo||'Sin tipo';byTipo[t]=(byTipo[t]||0)+entryDur(e);});
   const bar=Object.entries(byTipo).sort((a,b)=>b[1]-a[1]).map(([t,s])=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:9px;height:9px;border-radius:50%;background:${tipoColor(t)};flex-shrink:0;"></span><span style="font-weight:600;">${t}</span><span style="color:var(--text2);flex:1;text-align:right;">${fmtDur(s)}</span></div>`).join('');
-  const rows=de.sort((a,b)=>new Date(a.timeInterval.start)-new Date(b.timeInterval.start)).map(e=>{
-    const desc=e.description||'(sin descripción)',tipo=desc.split('_')[0],color=tipoColor(tipo);
-    const st=new Date(e.timeInterval.start).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
-    const en=new Date(e.timeInterval.end).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
-    const proj=cwProjects.find(p=>p.id===e.projectId);
-    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(desc)}</div><div class="cw-entry-sub">${st}–${en}${proj?' · '+escapeHtml(proj.name):''}</div></div><span class="cw-entry-dur">${fmtDur(entryDur(e))}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
+  const rows=de.sort((a,b)=>new Date(a.hora_inicio)-new Date(b.hora_inicio)).map(e=>{
+    const fullDesc=`${e.tipo}_${e.descripcion||''}`, color=tipoColor(e.tipo);
+    const st=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const pn=entryProjName(e);
+    return `<div class="cw-entry"><span class="cw-tipo-dot" style="background:${color};"></span><div class="cw-entry-info"><div class="cw-entry-desc">${escapeHtml(fullDesc)}</div><div class="cw-entry-sub">${st}–${en}${pn?' · '+escapeHtml(pn):''}</div></div><span class="cw-entry-dur">${fmtDur(entryDur(e))}</span><button class="cw-entry-del" onclick="deleteCWEntry('${e.id}',this)" title="Eliminar"><i class="ti ti-trash"></i></button></div>`;
   }).join('');
   det.innerHTML=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;"><div style="flex:1;min-width:160px;background:var(--surface2);border-radius:9px;padding:10px 14px;"><div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px;">Por tipo</div><div style="display:flex;flex-direction:column;gap:5px;">${bar}</div></div></div><div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>`;
+}
+
+// ---- Admin: gestión de proyectos ----
+async function renderCWAdminProjects(){
+  const cont=document.getElementById('cw-admin-projects'); if(!cont)return;
+  cont.style.display='';
+  const {data}=await supa.from('proyectos').select('*').order('nombre');
+  const list=document.getElementById('cw-admin-proj-list'); if(!list)return;
+  if(!data||!data.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);">Sin proyectos todavía.</div>';return;}
+  list.innerHTML=data.map(p=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border2);">
+      <span style="width:12px;height:12px;border-radius:50%;background:${p.color||'#90A4AE'};flex-shrink:0;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;">${escapeHtml(p.nombre)}</div>
+        ${p.cliente?`<div style="font-size:11px;color:var(--text2);">${escapeHtml(p.cliente)}</div>`:''}
+      </div>
+      <span style="font-size:11px;padding:2px 7px;border-radius:5px;background:${p.activo?'#e8f5e9':'#fce4ec'};color:${p.activo?'#2e7d32':'#c62828'};">${p.activo?'Activo':'Inactivo'}</span>
+      <button onclick="cwToggleProject('${p.id}',${!p.activo})" style="border:none;background:none;cursor:pointer;color:var(--text2);font-size:13px;" title="${p.activo?'Desactivar':'Activar'}"><i class="ti ti-${p.activo?'eye-off':'eye'}"></i></button>
+      <button onclick="cwDeleteProject('${p.id}',this)" style="border:none;background:none;cursor:pointer;color:#ef5350;font-size:13px;" title="Eliminar"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+async function cwAddProject(btn){
+  const nombre=document.getElementById('cw-new-proj-name').value.trim();
+  const cliente=document.getElementById('cw-new-proj-client').value.trim();
+  const color=document.getElementById('cw-new-proj-color').value;
+  if(!nombre){alert('El nombre del proyecto es obligatorio.');return;}
+  btn.disabled=true;
+  const {error}=await supa.from('proyectos').insert({nombre,cliente:cliente||null,color,activo:true});
+  btn.disabled=false;
+  if(error){alert('Error al crear el proyecto.');return;}
+  document.getElementById('cw-new-proj-name').value='';
+  document.getElementById('cw-new-proj-client').value='';
+  showToast('Proyecto creado ✓');
+  await loadCWProjects(); await renderCWAdminProjects();
+}
+
+async function cwToggleProject(id,activo){
+  await supa.from('proyectos').update({activo}).eq('id',id);
+  await loadCWProjects(); await renderCWAdminProjects();
+}
+
+async function cwDeleteProject(id,btn){
+  if(!confirm('¿Eliminar este proyecto? Las entradas de tiempo quedarán sin proyecto asignado.'))return;
+  btn.disabled=true;
+  const {error}=await supa.from('proyectos').delete().eq('id',id);
+  if(error){btn.disabled=false;alert('Error al eliminar.');return;}
+  showToast('Proyecto eliminado ✓');
+  await loadCWProjects(); await renderCWAdminProjects();
 }
 
 </script>
@@ -5021,17 +5053,17 @@ function renderCWDayDetail(de){
     <!-- WIP Banner -->
     <div style="display:flex;align-items:center;gap:10px;background:#fff8e1;border:1px solid #ffc107;border-radius:10px;padding:10px 16px;margin-bottom:16px;">
       <i class="ti ti-tools" style="color:#f59e0b;font-size:18px;flex-shrink:0;"></i>
-      <div><strong style="font-size:13px;color:#92400e;">Módulo en construcción (WIP)</strong><span style="font-size:12px;color:#78350f;margin-left:8px;">Las funcionalidades de fichaje se irán completando. Los datos van directamente a Clockify.</span></div>
+      <div><strong style="font-size:13px;color:#92400e;">Módulo en construcción (WIP)</strong><span style="font-size:12px;color:#78350f;margin-left:8px;">Las funcionalidades de fichaje se irán completando. Los datos se guardan en la base de datos propia.</span></div>
     </div>
 
     <!-- Estado de carga / error -->
     <div id="fichaje-loading" style="text-align:center;padding:40px;color:var(--text2);font-size:14px;">
-      <i class="ti ti-loader-2" style="font-size:28px;display:block;margin-bottom:8px;animation:spin 1s linear infinite;"></i>Conectando con Clockify…
+      <i class="ti ti-loader-2" style="font-size:28px;display:block;margin-bottom:8px;animation:spin 1s linear infinite;"></i>Cargando fichaje…
     </div>
     <div id="fichaje-no-config" style="display:none;text-align:center;padding:40px;">
       <i class="ti ti-clock-off" style="font-size:44px;color:var(--text2);display:block;margin-bottom:12px;"></i>
       <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Clockify no configurado</div>
-      <div style="font-size:13px;color:var(--text2);max-width:360px;margin:0 auto;">Tu usuario no tiene un ID de Clockify asignado o la API key no está configurada. Contacta con el administrador.</div>
+      <div style="font-size:13px;color:var(--text2);max-width:360px;margin:0 auto;">No se ha podido cargar tu perfil. Prueba a recargar la página o contacta con el administrador.</div>
     </div>
     <div id="fichaje-error" style="display:none;text-align:center;padding:40px;">
       <i class="ti ti-wifi-off" style="font-size:44px;color:#ef5350;display:block;margin-bottom:12px;"></i>
@@ -5150,6 +5182,22 @@ function renderCWDayDetail(de){
         <div id="cw-week-detail" style="border-top:1px solid var(--border2);padding-top:12px;display:none;"></div>
       </div>
 
+      <!-- PANEL ADMIN: GESTIÓN DE PROYECTOS -->
+      <div id="cw-admin-projects" class="card" style="margin-top:12px;display:none;">
+        <div style="font-weight:600;font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+          <i class="ti ti-briefcase grad-icon"></i> Proyectos <span style="font-size:11px;font-weight:400;color:var(--text2);">(solo admins)</span>
+        </div>
+        <!-- Crear nuevo proyecto -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border2);">
+          <input id="cw-new-proj-name" type="text" class="form-control" placeholder="Nombre del proyecto" style="flex:2;min-width:160px;">
+          <input id="cw-new-proj-client" type="text" class="form-control" placeholder="Cliente (opcional)" style="flex:2;min-width:140px;">
+          <input id="cw-new-proj-color" type="color" value="#1565C0" style="width:42px;height:38px;border:1px solid var(--border2);border-radius:8px;cursor:pointer;padding:2px;">
+          <button class="btn btn-primary btn-sm" onclick="cwAddProject(this)"><i class="ti ti-plus"></i> Crear</button>
+        </div>
+        <!-- Lista de proyectos -->
+        <div id="cw-admin-proj-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+
       <!-- GUÍA DE NOMENCLATURA -->
       <details class="card" style="margin-top:12px;" onToggle="document.getElementById('cw-guide-chevron').style.transform=this.open?'rotate(180deg)':''">
         <summary style="font-weight:600;font-size:14px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:2px 0;">
@@ -5158,7 +5206,7 @@ function renderCWDayDetail(de){
         </summary>
         <div style="margin-top:16px;">
           <div style="background:var(--surface2);border-radius:10px;padding:14px 18px;margin-bottom:14px;border-left:3px solid #1565C0;">
-            <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Formato de la descripción en Clockify</div>
+            <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Formato de la descripción</div>
             <div style="font-family:monospace;font-size:15px;">
               <span style="font-weight:700;color:#1565C0;background:#e3f2fd;padding:2px 6px;border-radius:4px;">TipoTarea</span>
               <span style="color:var(--text2);">_</span>
@@ -5177,7 +5225,7 @@ function renderCWDayDetail(de){
             </div>
             <div style="background:var(--surface2);border-radius:9px;padding:12px 14px;">
               <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px;"><i class="ti ti-briefcase" style="margin-right:4px;"></i>Proyecto</div>
-              <div style="font-size:12px;color:var(--text2);">Selecciona el proyecto en Clockify. Debe existir previamente (creado por el admin) con el formato <strong>Proyecto - Cliente</strong>.</div>
+              <div style="font-size:12px;color:var(--text2);">Selecciona el proyecto de la lista. Los proyectos los gestiona el admin desde este mismo módulo de fichaje.</div>
             </div>
           </div>
           <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
