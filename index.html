@@ -4799,17 +4799,19 @@ async function initClockify(){
   const md=document.getElementById('cw-manual-date'); if(md) md.value=today;
   await Promise.all([loadCWProjects(),checkRunningCWTimer()]);
   await loadCWToday(); cwWeekOffset=0; await loadCWWeek();
-  // proyectos gestionados desde tab Capacidad (cap_proyectos)
+  if(supaProfile?.rol==='admin'){ document.getElementById('cw-admin-projects').style.display=''; await renderCWAdminProjects(); }
   document.getElementById('fichaje-loading').style.display='none';
   document.getElementById('fichaje-content').style.display='';
 }
 
 async function loadCWProjects(){
-  const {data,error}=await supa.from('cap_proyectos').select('id,nombre,cliente,color').order('orden').order('nombre');
+  const {data,error}=await supa.from('cap_proyectos').select('id,nombre,cliente,color,orden').order('orden').order('nombre');
   if(error){console.error('CW proyectos',error);return;}
   cwProjects=data||[];
-  const sel=document.getElementById('cw-project');
-  if(sel) sel.innerHTML='<option value="">Sin proyecto asignado</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
+  ['cw-project','anl-proj-select'].forEach(id=>{
+    const sel=document.getElementById(id); if(!sel)return;
+    sel.innerHTML='<option value="">Sin proyecto asignado</option>'+cwProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.nombre)}${p.cliente?' — '+escapeHtml(p.cliente):''}</option>`).join('');
+  });
 }
 
 async function checkRunningCWTimer(){
@@ -4998,50 +5000,47 @@ function renderCWDayDetail(de){
   det.innerHTML=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;"><div style="flex:1;min-width:160px;background:var(--surface2);border-radius:9px;padding:10px 14px;"><div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px;">Por tipo</div><div style="display:flex;flex-direction:column;gap:5px;">${bar}</div></div></div><div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>`;
 }
 
-// ---- Admin: gestión de proyectos ----
+// ---- Admin: gestión de proyectos (compartido con Capacidad) ----
 async function renderCWAdminProjects(){
-  const cont=document.getElementById('cw-admin-projects'); if(!cont)return;
-  cont.style.display='';
-  const {data}=await supa.from('proyectos').select('*').order('nombre');
-  const list=document.getElementById('cw-admin-proj-list'); if(!list)return;
-  if(!data||!data.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);">Sin proyectos todavía.</div>';return;}
-  list.innerHTML=data.map(p=>`
+  const {data}=await supa.from('cap_proyectos').select('id,nombre,cliente,color').order('orden').order('nombre');
+  const rows=(data||[]).map(p=>`
     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border2);">
-      <span style="width:12px;height:12px;border-radius:50%;background:${p.color||'#90A4AE'};flex-shrink:0;"></span>
+      <span style="width:12px;height:12px;border-radius:50%;background:${p.color||'#1565C0'};flex-shrink:0;display:inline-block;"></span>
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;">${escapeHtml(p.nombre)}</div>
         ${p.cliente?`<div style="font-size:11px;color:var(--text2);">${escapeHtml(p.cliente)}</div>`:''}
       </div>
-      <span style="font-size:11px;padding:2px 7px;border-radius:5px;background:${p.activo?'#e8f5e9':'#fce4ec'};color:${p.activo?'#2e7d32':'#c62828'};">${p.activo?'Activo':'Inactivo'}</span>
-      <button onclick="cwToggleProject('${p.id}',${!p.activo})" style="border:none;background:none;cursor:pointer;color:var(--text2);font-size:13px;" title="${p.activo?'Desactivar':'Activar'}"><i class="ti ti-${p.activo?'eye-off':'eye'}"></i></button>
-      <button onclick="cwDeleteProject('${p.id}',this)" style="border:none;background:none;cursor:pointer;color:#ef5350;font-size:13px;" title="Eliminar"><i class="ti ti-trash"></i></button>
+      <button onclick="cwDeleteProject('${p.id}',this)" style="border:none;background:none;cursor:pointer;color:#ef5350;font-size:14px;padding:4px;" title="Eliminar"><i class="ti ti-trash"></i></button>
     </div>`).join('');
+  ['cw-admin-proj-list','anl-admin-proj-list'].forEach(id=>{
+    const el=document.getElementById(id); if(!el)return;
+    el.innerHTML=rows||'<div style="font-size:13px;color:var(--text2);">Sin proyectos todavía.</div>';
+  });
 }
 
 async function cwAddProject(btn){
-  const nombre=document.getElementById('cw-new-proj-name').value.trim();
-  const cliente=document.getElementById('cw-new-proj-client').value.trim();
-  const color=document.getElementById('cw-new-proj-color').value;
+  const nameEl=btn.closest('[data-proj-form]')?.querySelector('.proj-name')||document.getElementById('cw-new-proj-name');
+  const clientEl=btn.closest('[data-proj-form]')?.querySelector('.proj-client')||document.getElementById('cw-new-proj-client');
+  const colorEl=btn.closest('[data-proj-form]')?.querySelector('.proj-color')||document.getElementById('cw-new-proj-color');
+  const nombre=(nameEl?.value||'').trim();
+  const cliente=(clientEl?.value||'').trim();
+  const color=colorEl?.value||'#1565C0';
   if(!nombre){alert('El nombre del proyecto es obligatorio.');return;}
   btn.disabled=true;
-  const {error}=await supa.from('proyectos').insert({nombre,cliente:cliente||null,color,activo:true});
+  const maxOrden=(await supa.from('cap_proyectos').select('orden').order('orden',{ascending:false}).limit(1)).data?.[0]?.orden||0;
+  const {error}=await supa.from('cap_proyectos').insert({nombre,cliente:cliente||null,color,orden:maxOrden+1});
   btn.disabled=false;
-  if(error){alert('Error al crear el proyecto.');return;}
-  document.getElementById('cw-new-proj-name').value='';
-  document.getElementById('cw-new-proj-client').value='';
+  if(error){alert('Error al crear el proyecto: '+error.message);return;}
+  if(nameEl)nameEl.value='';
+  if(clientEl)clientEl.value='';
   showToast('Proyecto creado ✓');
-  await loadCWProjects(); await renderCWAdminProjects();
-}
-
-async function cwToggleProject(id,activo){
-  await supa.from('proyectos').update({activo}).eq('id',id);
   await loadCWProjects(); await renderCWAdminProjects();
 }
 
 async function cwDeleteProject(id,btn){
   if(!confirm('¿Eliminar este proyecto? Las entradas de tiempo quedarán sin proyecto asignado.'))return;
   btn.disabled=true;
-  const {error}=await supa.from('proyectos').delete().eq('id',id);
+  const {error}=await supa.from('cap_proyectos').delete().eq('id',id);
   if(error){btn.disabled=false;alert('Error al eliminar.');return;}
   showToast('Proyecto eliminado ✓');
   await loadCWProjects(); await renderCWAdminProjects();
@@ -5072,6 +5071,8 @@ async function initAnalisis(){
       const sel=document.getElementById('anl-user');
       sel.innerHTML='<option value="">Todos</option>'+anlUsers.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)}</option>`).join('');
       document.querySelectorAll('.admin-only').forEach(el=>el.style.display='');
+      document.getElementById('anl-admin-projects').style.display='';
+      await renderCWAdminProjects();
     }
     anlLoaded=true;
   }
@@ -5495,6 +5496,21 @@ async function anlSendEmailReport(){
 
   <!-- ==================== ANÁLISIS ==================== -->
   <div id="tab-analisis" class="panel" style="display:none;">
+
+    <!-- Panel admin: proyectos (compartido con Capacidad y Fichaje) -->
+    <div id="anl-admin-projects" class="card admin-only" style="display:none;margin-bottom:14px;">
+      <div style="font-weight:600;font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <i class="ti ti-briefcase grad-icon"></i> Proyectos
+        <span style="font-size:11px;font-weight:400;color:var(--text2);">— compartidos con Capacidad y Fichaje</span>
+      </div>
+      <div data-proj-form style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border2);">
+        <input class="proj-name form-control" type="text" placeholder="Nombre del proyecto" style="flex:2;min-width:160px;">
+        <input class="proj-client form-control" type="text" placeholder="Cliente (opcional)" style="flex:2;min-width:140px;">
+        <input class="proj-color" type="color" value="#1565C0" style="width:42px;height:38px;border:1px solid var(--border2);border-radius:8px;cursor:pointer;padding:2px;">
+        <button class="btn btn-primary btn-sm" onclick="cwAddProject(this)"><i class="ti ti-plus"></i> Crear</button>
+      </div>
+      <div id="anl-admin-proj-list" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;"></div>
+    </div>
 
     <!-- Filtros -->
     <div class="card" style="margin-bottom:14px;">
