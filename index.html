@@ -6,6 +6,7 @@
 <title>Infinity Dimensions · Gestión de equipo</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%23F7941D'/%3E%3Cstop offset='25%25' stop-color='%23E8312A'/%3E%3Cstop offset='50%25' stop-color='%23C2185B'/%3E%3Cstop offset='75%25' stop-color='%237B1FA2'/%3E%3Cstop offset='100%25' stop-color='%231565C0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='15' fill='url(%23g)'/%3E%3Cpath d='M16,16 C13,10 5,10 5,16 C5,22 13,22 16,16 C19,10 27,10 27,16 C27,22 19,22 16,16' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="supabase.min.js"></script>
 <div id="cdn-error" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#c62828;color:#fff;padding:12px 20px;font-family:sans-serif;font-size:14px;">
   ⚠️ No se pudo cargar Supabase SDK. Verifica tu conexión a internet y recarga la página.
@@ -510,6 +511,7 @@ td.cap-proj-cell { padding:10px 12px; vertical-align:top; background:var(--cp2);
     <button class="tab" onclick="showTab('politica',this)"><i class="ti ti-book"></i> Política</button>
     <button class="tab admin-only" onclick="showTab('capacidad',this)"><i class="ti ti-layout-kanban"></i> Capacidad</button>
     <button class="tab" id="tab-btn-fichaje" onclick="showTab('fichaje',this)"><i class="ti ti-clock-play"></i> Fichaje</button>
+    <button class="tab" id="tab-btn-analisis" onclick="showTab('analisis',this)"><i class="ti ti-chart-bar"></i> Análisis</button>
   </div>
 
   <!-- ==================== VACACIONES ==================== -->
@@ -3530,6 +3532,7 @@ function showTab(name,btn){
   if(name==='aprobaciones') buildOverlapCal();
   if(name==='equipo') renderEquipoTab();
   if(name==='fichaje') initClockify();
+  if(name==='analisis') initAnalisis();
   if(name==='festivos') {
     festYear = new Date().getFullYear();
     renderFestCal();
@@ -5044,6 +5047,257 @@ async function cwDeleteProject(id,btn){
   await loadCWProjects(); await renderCWAdminProjects();
 }
 
+// ===== ANÁLISIS =====
+let anlData=[], anlProjects=[], anlUsers=[], anlLoaded=false;
+
+const anlDurH=e=>{
+  if(!e.hora_fin)return 0;
+  return Math.round((new Date(e.hora_fin)-new Date(e.hora_inicio))/36000)/100;
+};
+
+async function initAnalisis(){
+  if(!anlLoaded){
+    const now=new Date();
+    const y=now.getFullYear(), m=now.getMonth();
+    document.getElementById('anl-from').value=new Date(y,m,1).toISOString().split('T')[0];
+    document.getElementById('anl-to').value=new Date(y,m+1,0).toISOString().split('T')[0];
+    const [r1,r2]=await Promise.all([
+      supa.from('cap_proyectos').select('id,nombre,cliente,color').order('nombre'),
+      supaProfile?.rol==='admin'?supa.from('usuarios').select('id,nombre,email'):Promise.resolve({data:[]}),
+    ]);
+    anlProjects=r1.data||[];
+    anlUsers=r2.data||[];
+    if(supaProfile?.rol==='admin'){
+      document.getElementById('anl-user-wrap').style.display='';
+      const sel=document.getElementById('anl-user');
+      sel.innerHTML='<option value="">Todos</option>'+anlUsers.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)}</option>`).join('');
+      document.querySelectorAll('.admin-only').forEach(el=>el.style.display='');
+    }
+    anlLoaded=true;
+  }
+  await loadAnlData();
+}
+
+function anlSetPeriod(p){
+  const now=new Date();
+  let from,to;
+  if(p==='week'){const dow=(now.getDay()+6)%7;from=new Date(now);from.setDate(now.getDate()-dow);to=new Date(from);to.setDate(from.getDate()+6);}
+  else if(p==='month'){from=new Date(now.getFullYear(),now.getMonth(),1);to=new Date(now.getFullYear(),now.getMonth()+1,0);}
+  else if(p==='prevmonth'){from=new Date(now.getFullYear(),now.getMonth()-1,1);to=new Date(now.getFullYear(),now.getMonth(),0);}
+  else if(p==='year'){from=new Date(now.getFullYear(),0,1);to=new Date(now.getFullYear(),11,31);}
+  document.getElementById('anl-from').value=from.toISOString().split('T')[0];
+  document.getElementById('anl-to').value=to.toISOString().split('T')[0];
+  loadAnlData();
+}
+
+async function loadAnlData(){
+  const loading=document.getElementById('anl-loading'),content=document.getElementById('anl-content');
+  loading.style.display='';content.style.display='none';
+  const from=document.getElementById('anl-from').value;
+  const to=document.getElementById('anl-to').value;
+  const uid=document.getElementById('anl-user')?.value||'';
+  let q=supa.from('time_entries').select('*').not('hora_fin','is',null).gte('fecha',from).lte('fecha',to);
+  if(uid) q=q.eq('usuario_id',uid);
+  else if(supaProfile?.rol!=='admin') q=q.eq('usuario_id',supaUser.id);
+  q=q.order('fecha',{ascending:false}).order('hora_inicio',{ascending:false});
+  const {data}=await q;
+  anlData=data||[];
+  loading.style.display='none';content.style.display='';
+  renderAnl();
+}
+
+function renderAnl(){
+  renderAnlCards();
+  renderAnlTipoChart();
+  renderAnlProjChart();
+  if(supaProfile?.rol==='admin') renderAnlPersonChart();
+  renderAnlTrend();
+  renderAnlTable();
+}
+
+function renderAnlCards(){
+  const tot=anlData.reduce((a,e)=>a+anlDurH(e),0);
+  const dias=new Set(anlData.map(e=>e.fecha)).size;
+  const projs=new Set(anlData.filter(e=>e.proyecto_id).map(e=>e.proyecto_id)).size;
+  const sinP=anlData.filter(e=>!e.proyecto_id).length;
+  document.getElementById('anl-card-horas').textContent=tot.toFixed(1)+'h';
+  document.getElementById('anl-card-dias').textContent=dias;
+  document.getElementById('anl-card-proy').textContent=projs;
+  document.getElementById('anl-card-sinproy').textContent=sinP;
+  document.getElementById('anl-card-sinproy').style.color=sinP>0?'#e65100':'#43a047';
+  document.getElementById('anl-card-sinproy-wrap').style.background=sinP>0?'#fff3e0':'var(--surface)';
+  const ce=document.getElementById('anl-card-entradas');if(ce)ce.textContent=anlData.length;
+}
+
+function anlBarChart(el,rows,maxVal){
+  if(!rows.length){el.innerHTML='<div style="color:var(--text2);font-size:13px;text-align:center;padding:16px;">Sin datos</div>';return;}
+  el.innerHTML=rows.map(({label,value,color,subtitle})=>{
+    const pct=Math.round((value/maxVal)*100);
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+      <div style="width:110px;flex-shrink:0;text-align:right;">
+        <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+        ${subtitle?`<div style="font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(subtitle)}</div>`:''}
+      </div>
+      <div style="flex:1;background:var(--border2);border-radius:4px;height:16px;overflow:hidden;">
+        <div style="width:${pct}%;background:${color};height:100%;border-radius:4px;transition:.4s;"></div>
+      </div>
+      <span style="width:40px;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0;text-align:right;">${value.toFixed(1)}h</span>
+    </div>`;
+  }).join('');
+}
+
+function renderAnlTipoChart(){
+  const by={};anlData.forEach(e=>{by[e.tipo]=(by[e.tipo]||0)+anlDurH(e);});
+  const sorted=Object.entries(by).sort((a,b)=>b[1]-a[1]);
+  const max=sorted[0]?.[1]||1;
+  anlBarChart(document.getElementById('anl-tipo-chart'),sorted.map(([t,h])=>({label:t,value:h,color:tipoColor(t)})),max);
+}
+
+function renderAnlProjChart(){
+  const by={};anlData.forEach(e=>{const k=e.proyecto_id||'__none__';by[k]=(by[k]||0)+anlDurH(e);});
+  const sorted=Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const max=sorted[0]?.[1]||1;
+  anlBarChart(document.getElementById('anl-proj-chart'),sorted.map(([pid,h])=>{
+    const p=anlProjects.find(x=>x.id===pid);
+    return{label:p?p.nombre:'Sin proyecto',subtitle:p?.cliente||'',value:h,color:pid==='__none__'?'#B0BEC5':(p?.color||'#1565C0')};
+  }),max);
+}
+
+function renderAnlPersonChart(){
+  const el=document.getElementById('anl-person-chart');if(!el)return;
+  const by={};anlData.forEach(e=>{by[e.usuario_id]=(by[e.usuario_id]||0)+anlDurH(e);});
+  const sorted=Object.entries(by).sort((a,b)=>b[1]-a[1]);
+  const max=sorted[0]?.[1]||1;
+  const COLORS=['#F7941D','#E8312A','#C2185B','#7B1FA2','#1565C0','#00838F','#2E7D32','#F57F17'];
+  anlBarChart(el,sorted.map(([uid,h],i)=>{
+    const u=anlUsers.find(x=>x.id===uid);
+    return{label:u?u.nombre.split(' ').slice(0,2).join(' '):'Desconocido',value:h,color:COLORS[i%COLORS.length]};
+  }),max);
+}
+
+function renderAnlTrend(){
+  const by={};anlData.forEach(e=>{by[e.fecha]=(by[e.fecha]||0)+anlDurH(e);});
+  const dates=Object.keys(by).sort();
+  const el=document.getElementById('anl-trend');if(!el)return;
+  if(dates.length<2){el.innerHTML='<div style="color:var(--text2);font-size:13px;text-align:center;padding:20px;">Necesitas datos de al menos 2 días para ver la tendencia</div>';return;}
+  const W=700,H=130,pad={l:34,r:10,t:10,b:26};
+  const maxH=Math.max(...Object.values(by),1);
+  const plotW=W-pad.l-pad.r,plotH=H-pad.t-pad.b;
+  const px=i=>pad.l+Math.round((i/(dates.length-1))*plotW);
+  const py=v=>pad.t+Math.round((1-(v/maxH))*plotH);
+  const pts=dates.map((d,i)=>`${px(i)},${py(by[d])}`).join(' ');
+  const area=`${px(0)},${py(0)+plotH} ${pts} ${px(dates.length-1)},${py(0)+plotH}`;
+  const step=Math.ceil(dates.length/7);
+  const labels=dates.filter((_,i)=>i%step===0||i===dates.length-1).map(d=>{
+    const i=dates.indexOf(d);
+    const lbl=new Date(d+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'});
+    return `<text x="${px(i)}" y="${H-5}" text-anchor="middle" fill="var(--text2)" font-size="10">${lbl}</text>`;
+  }).join('');
+  const ylines=[0.25,0.5,0.75,1].map(f=>{
+    const yv=py(maxH*f);
+    return `<line x1="${pad.l}" y1="${yv}" x2="${W-pad.r}" y2="${yv}" stroke="var(--border2)" stroke-dasharray="3,2"/>
+            <text x="${pad.l-4}" y="${yv+4}" text-anchor="end" fill="var(--text2)" font-size="10">${(maxH*f).toFixed(0)}h</text>`;
+  }).join('');
+  const dots=dates.map((d,i)=>`<circle cx="${px(i)}" cy="${py(by[d])}" r="3.5" fill="#1565C0" stroke="white" stroke-width="1.5"><title>${d}: ${by[d].toFixed(1)}h</title></circle>`).join('');
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">
+    <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1565C0" stop-opacity=".2"/><stop offset="100%" stop-color="#1565C0" stop-opacity="0"/></linearGradient></defs>
+    ${ylines}<polygon points="${area}" fill="url(#ag)"/>
+    <polyline points="${pts}" fill="none" stroke="#1565C0" stroke-width="2.5" stroke-linejoin="round"/>
+    ${dots}${labels}</svg>`;
+}
+
+function renderAnlTable(){
+  const onlyProb=document.getElementById('anl-only-problems')?.checked;
+  const data=onlyProb?anlData.filter(e=>!e.proyecto_id):anlData;
+  const isAdmin=supaProfile?.rol==='admin';
+  const uc=document.getElementById('anl-table-user-col');if(uc)uc.style.display=isAdmin?'':'none';
+  const tb=document.getElementById('anl-table-body');if(!tb)return;
+  if(!data.length){tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text2);">Sin entradas${onlyProb?' sin proyecto':''}</td></tr>`;return;}
+  tb.innerHTML=data.map(e=>{
+    const p=anlProjects.find(x=>x.id===e.proyecto_id);
+    const pn=p?escapeHtml(p.nombre+(p.cliente?' — '+p.cliente:'')):'<span style="color:#e65100;font-style:italic;">Sin proyecto ⚠️</span>';
+    const u=isAdmin?anlUsers.find(x=>x.id===e.usuario_id):null;
+    const h=anlDurH(e);
+    const st=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const ok=!!e.proyecto_id;
+    return `<tr style="${!ok?'background:#fff8e1;':''}border-bottom:1px solid var(--border2);">
+      <td style="padding:7px 10px;white-space:nowrap;">${e.fecha}<br><span style="font-size:10px;color:var(--text2);">${st}–${en}</span></td>
+      ${isAdmin?`<td style="padding:7px 10px;font-size:12px;">${escapeHtml(u?.nombre?.split(' ').slice(0,2).join(' ')||'')}</td>`:''}
+      <td style="padding:7px 10px;"><span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${tipoColor(e.tipo)};flex-shrink:0;"></span><strong>${escapeHtml(e.tipo)}</strong></span></td>
+      <td style="padding:7px 10px;font-size:12px;color:var(--text2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(e.descripcion||'—')}</td>
+      <td style="padding:7px 10px;font-size:12px;">${pn}</td>
+      <td style="padding:7px 10px;text-align:right;font-weight:700;">${h.toFixed(1)}h</td>
+      <td style="padding:7px 10px;text-align:center;">${ok?'<span style="color:#43a047;font-size:15px;">✓</span>':'<span style="font-size:15px;">⚠️</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function anlExportCSV(){
+  const from=document.getElementById('anl-from').value,to=document.getElementById('anl-to').value;
+  const isAdmin=supaProfile?.rol==='admin';
+  const headers=['Fecha','Hora inicio','Hora fin','Horas',...(isAdmin?['Persona']:[]),'Tipo','Descripción','Proyecto','Cliente','Sin proyecto'];
+  const rows=anlData.map(e=>{
+    const p=anlProjects.find(x=>x.id===e.proyecto_id);
+    const u=anlUsers.find(x=>x.id===e.usuario_id);
+    const st=new Date(e.hora_inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const en=new Date(e.hora_fin).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    return[e.fecha,st,en,anlDurH(e).toFixed(2),...(isAdmin?[u?.nombre||'']:[]),e.tipo,e.descripcion||'',p?.nombre||'',p?.cliente||'',e.proyecto_id?'No':'Sí']
+      .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const csv=[headers.join(','),...rows].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`fichaje_${from}_${to}.csv`;a.click();
+}
+
+// ---- Email resumen (EmailJS) ----
+const EJS_SVC='service_oodimensions', EJS_TPL='template_fichaje_report', EJS_KEY='YOUR_EMAILJS_PUBLIC_KEY';
+
+async function anlSendEmailReport(){
+  const btn=document.getElementById('anl-email-btn');
+  const problemas=anlData.filter(e=>!e.proyecto_id);
+  if(!problemas.length){showToast('No hay entradas sin proyecto. ¡Todo correcto!');return;}
+
+  // Agrupar por usuario
+  const byUser={};
+  problemas.forEach(e=>{
+    if(!byUser[e.usuario_id])byUser[e.usuario_id]={entries:[]};
+    byUser[e.usuario_id].entries.push(e);
+  });
+  const from=document.getElementById('anl-from').value,to=document.getElementById('anl-to').value;
+  const preview=Object.entries(byUser).map(([uid,d])=>{
+    const u=anlUsers.find(x=>x.id===uid);
+    return `${u?.nombre||uid}: ${d.entries.length} entrada(s) sin proyecto`;
+  }).join('\n');
+
+  if(!confirm(`Se enviarán correos de revisión a:\n\n${preview}\n\n¿Continuar?`))return;
+
+  if(!window.emailjs){
+    alert('EmailJS no está configurado. Consulta las instrucciones en la documentación del portal.');
+    return;
+  }
+
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2"></i> Enviando…';
+  let sent=0,errors=0;
+  for(const [uid,d] of Object.entries(byUser)){
+    const u=anlUsers.find(x=>x.id===uid);
+    if(!u?.email)continue;
+    const rows=d.entries.map(e=>`• ${e.fecha} | ${e.tipo}${e.descripcion?'_'+e.descripcion:''} | ${anlDurH(e).toFixed(1)}h`).join('\n');
+    try{
+      await emailjs.send(EJS_SVC,EJS_TPL,{
+        to_email:u.email,to_name:u.nombre.split(' ')[0],
+        periodo:`${from} — ${to}`,
+        num_entradas:d.entries.length,
+        detalle:rows,
+      },EJS_KEY);
+      sent++;
+    }catch(e){console.error('EmailJS error',e);errors++;}
+  }
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-mail"></i> Enviar resumen';
+  showToast(`Correos enviados: ${sent}${errors?` (${errors} errores)`:''}  ✓`);
+}
+
 </script>
   <!-- ==================== FICHAJE ==================== -->
   <div id="tab-fichaje" class="panel">
@@ -5236,6 +5490,135 @@ async function cwDeleteProject(id,btn){
           </table>
         </div>
       </details>
+    </div>
+  </div>
+
+  <!-- ==================== ANÁLISIS ==================== -->
+  <div id="tab-analisis" class="panel" style="display:none;">
+
+    <!-- Filtros -->
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">PERÍODO RÁPIDO</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm" onclick="anlSetPeriod('week')">Esta semana</button>
+            <button class="btn btn-ghost btn-sm" onclick="anlSetPeriod('month')">Este mes</button>
+            <button class="btn btn-ghost btn-sm" onclick="anlSetPeriod('prevmonth')">Mes anterior</button>
+            <button class="btn btn-ghost btn-sm" onclick="anlSetPeriod('year')">Este año</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">DESDE</div>
+            <input type="date" id="anl-from" class="form-control" style="width:140px;">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">HASTA</div>
+            <input type="date" id="anl-to" class="form-control" style="width:140px;">
+          </div>
+          <div id="anl-user-wrap" style="display:none;">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">PERSONA</div>
+            <select id="anl-user" class="form-control" style="width:160px;"></select>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadAnlData()"><i class="ti ti-refresh"></i> Aplicar</button>
+          <button class="btn btn-ghost btn-sm" onclick="anlExportCSV()" title="Exportar CSV"><i class="ti ti-download"></i> CSV</button>
+          <button class="btn btn-ghost btn-sm admin-only" onclick="anlSendEmailReport()" title="Enviar resumen por correo" id="anl-email-btn"><i class="ti ti-mail"></i> Enviar resumen</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="anl-loading" style="text-align:center;padding:40px;color:var(--text2);font-size:14px;display:none;">
+      <i class="ti ti-loader-2" style="font-size:28px;display:block;margin-bottom:8px;animation:spin 1s linear infinite;"></i>Cargando datos…
+    </div>
+
+    <div id="anl-content" style="display:none;">
+      <!-- Cards resumen -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;">
+        <div class="card" style="text-align:center;padding:14px 10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Total horas</div>
+          <div id="anl-card-horas" style="font-size:26px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">—</div>
+        </div>
+        <div class="card" style="text-align:center;padding:14px 10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Días fichados</div>
+          <div id="anl-card-dias" style="font-size:26px;font-weight:800;color:var(--text);">—</div>
+        </div>
+        <div class="card" style="text-align:center;padding:14px 10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Proyectos</div>
+          <div id="anl-card-proy" style="font-size:26px;font-weight:800;color:var(--text);">—</div>
+        </div>
+        <div id="anl-card-sinproy-wrap" class="card" style="text-align:center;padding:14px 10px;transition:.3s;">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Sin proyecto</div>
+          <div id="anl-card-sinproy" style="font-size:26px;font-weight:800;color:#e65100;">—</div>
+        </div>
+        <div class="card admin-only" style="text-align:center;padding:14px 10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Entradas</div>
+          <div id="anl-card-entradas" style="font-size:26px;font-weight:800;color:var(--text);">—</div>
+        </div>
+      </div>
+
+      <!-- Gráficos principales -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px;">
+        <!-- Horas por TipoTarea -->
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px;">
+            <i class="ti ti-tag grad-icon"></i> Horas por tipo de tarea
+          </div>
+          <div id="anl-tipo-chart"></div>
+        </div>
+        <!-- Horas por Proyecto -->
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px;">
+            <i class="ti ti-briefcase grad-icon"></i> Horas por proyecto
+          </div>
+          <div id="anl-proj-chart"></div>
+        </div>
+      </div>
+
+      <!-- Horas por persona (solo admin) -->
+      <div class="card admin-only" id="anl-person-card" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px;">
+          <i class="ti ti-users grad-icon"></i> Horas por persona
+        </div>
+        <div id="anl-person-chart"></div>
+      </div>
+
+      <!-- Tendencia diaria -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px;">
+          <i class="ti ti-chart-line grad-icon"></i> Tendencia diaria
+        </div>
+        <div id="anl-trend" style="min-height:120px;"></div>
+      </div>
+
+      <!-- Tabla detalle -->
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+          <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;">
+            <i class="ti ti-list grad-icon"></i> Detalle de entradas
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;margin-left:auto;">
+            <input type="checkbox" id="anl-only-problems" onchange="renderAnlTable()">
+            Solo entradas sin proyecto
+          </label>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead>
+              <tr style="background:var(--surface2);">
+                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border2);">Fecha</th>
+                <th id="anl-table-user-col" style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border2);display:none;">Persona</th>
+                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border2);">Tipo</th>
+                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border2);">Descripción</th>
+                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border2);">Proyecto</th>
+                <th style="text-align:right;padding:7px 10px;border-bottom:2px solid var(--border2);">Horas</th>
+                <th style="text-align:center;padding:7px 10px;border-bottom:2px solid var(--border2);">✓</th>
+              </tr>
+            </thead>
+            <tbody id="anl-table-body"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
