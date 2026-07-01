@@ -4921,7 +4921,7 @@ async function startCWTimer(btn){
     proyecto_id:projId, fecha:today, hora_inicio:new Date().toISOString()
   }).select('*').single();
   btn.disabled=false; btn.innerHTML='<i class="ti ti-player-play-filled"></i> Iniciar cronómetro';
-  if(error){console.error(error);alert('Error al iniciar el cronómetro.');return;}
+  if(error){console.error(error);alert('Error al iniciar el cronómetro:\n'+(error.message||error.details||JSON.stringify(error)));return;}
   cwRunningEntry=data; showRunningBanner(); showToast('Cronómetro iniciado ✓');
 }
 
@@ -5471,54 +5471,58 @@ async function anlSendEmailReport(){
         </div>
       </div>
 
-      <!-- Botón iniciar (se oculta cuando hay timer activo) -->
-      <div id="cw-start-wrap" style="margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <button onclick="startCWTimer(this)" class="btn btn-primary" style="gap:8px;font-size:15px;padding:10px 28px;border-radius:10px;">
-          <i class="ti ti-player-play-filled"></i> Iniciar cronómetro
-        </button>
-        <span style="font-size:12px;color:var(--text2);">Rellena tipo y proyecto mientras corre el cronómetro</span>
-      </div>
+      <!-- COLUMNAS: izq = acciones, der = hoy -->
+      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:14px;margin-bottom:14px;align-items:start;">
 
-      <!-- ENTRADAS DE HOY -->
-      <div class="card" style="margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span id="cw-today-total" style="font-size:16px;font-weight:700;color:var(--primary);"></span>
-            <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
-          </div>
-        </div>
-        <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
-          <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
-        </div>
-      </div>
+        <!-- Columna izquierda: Iniciar + Entrada manual -->
+        <div style="display:flex;flex-direction:column;gap:12px;">
 
-      <!-- Entrada manual (hora fija) -->
-      <details class="card" style="margin-bottom:12px;">
-        <summary style="font-size:13px;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:2px 0;">
-          <i class="ti ti-clock-edit grad-icon"></i> Añadir entrada con hora fija
-        </summary>
-        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <select id="cw-tipo" class="form-select" style="flex:1;min-width:130px;">
-              <option value="">— Tipo de tarea —</option>
-            </select>
-            <input type="text" id="cw-desc" class="form-input" placeholder="Descripción (opcional)" maxlength="200" style="flex:2;min-width:180px;"/>
-            <select id="cw-project" class="form-select" style="flex:1;min-width:150px;">
-              <option value="">Sin proyecto</option>
-            </select>
+          <!-- Botón iniciar -->
+          <div id="cw-start-wrap" class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 16px;">
+            <button onclick="startCWTimer(this)" class="btn btn-primary" style="gap:8px;font-size:15px;padding:10px 28px;border-radius:10px;">
+              <i class="ti ti-player-play-filled"></i> Iniciar cronómetro
+            </button>
+            <span style="font-size:11px;color:var(--text2);text-align:center;">Rellena tipo y proyecto mientras corre</span>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:180px;">
-              <input type="time" id="cw-manual-start" class="form-input" style="flex:1;" value="09:00"/>
-              <span style="color:var(--text2);flex-shrink:0;">→</span>
-              <input type="time" id="cw-manual-end" class="form-input" style="flex:1;" value="10:00"/>
+
+          <!-- Entrada manual -->
+          <div class="card" style="padding:14px 16px;">
+            <div class="card-title" style="margin-bottom:12px;font-size:13px;"><i class="ti ti-clock-edit grad-icon"></i> Añadir con hora fija</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <select id="cw-tipo" class="form-select">
+                <option value="">— Tipo de tarea —</option>
+              </select>
+              <select id="cw-project" class="form-select">
+                <option value="">Sin proyecto</option>
+              </select>
+              <input type="text" id="cw-desc" class="form-input" placeholder="Descripción (opcional)" maxlength="200"/>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <input type="time" id="cw-manual-start" class="form-input" style="flex:1;" value="09:00"/>
+                <span style="color:var(--text2);flex-shrink:0;">→</span>
+                <input type="time" id="cw-manual-end" class="form-input" style="flex:1;" value="10:00"/>
+              </div>
+              <input type="date" id="cw-manual-date" class="form-input"/>
+              <button onclick="addManualCWEntry(this)" class="btn btn-primary btn-sm" style="align-self:flex-end;"><i class="ti ti-plus"></i> Añadir entrada</button>
             </div>
-            <input type="date" id="cw-manual-date" class="form-input" style="flex:1;min-width:140px;"/>
-            <button onclick="addManualCWEntry(this)" class="btn btn-primary btn-sm" style="flex-shrink:0;"><i class="ti ti-plus"></i> Añadir</button>
+          </div>
+
+        </div>
+
+        <!-- Columna derecha: Hoy -->
+        <div class="card" style="min-height:200px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div class="card-title" style="margin:0;"><i class="ti ti-list-details"></i> Hoy</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="cw-today-total" style="font-size:16px;font-weight:700;color:var(--primary);"></span>
+              <button onclick="loadCWToday()" class="btn btn-ghost btn-sm" title="Actualizar"><i class="ti ti-refresh"></i></button>
+            </div>
+          </div>
+          <div id="cw-today-list" style="display:flex;flex-direction:column;gap:6px;">
+            <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;">Cargando…</div>
           </div>
         </div>
-      </details>
+
+      </div>
 
       <!-- VISTA SEMANAL -->
       <div class="card" style="margin-top:12px;">
